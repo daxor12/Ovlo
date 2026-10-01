@@ -64,7 +64,7 @@ function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh
 function on(m){switch(m.t){
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T(m.c==='full'?'full':'dcm');show('dc')}break;
  case 'room':roomMsg=m;idx=m.idx;phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
- case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];sc=[0,0];tm=180}
+ case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];sc=[0,0];tm=180;mx=W/2;my=H-90}
   $('cdn').hidden=false;$('cdn').textContent=m.n||T('go');if(!m.n)setTimeout(()=>$('cdn').hidden=true,600);break;
  case 's':phase='play';if(!$('gm').classList.contains('on')){show('gm');fit()}snap(m);break;
  case 'goal':try{tg.HapticFeedback.impactOccurred('medium')}catch(e){}break;
@@ -94,8 +94,10 @@ function table(){const c=ox;c.setTransform(D*S,0,0,D*S,0,0);c.clearRect(0,0,W,H)
 const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
 function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:performance.now(),k,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
 let mx=W/2,my=H-90,lastSend=0,moved=0;
-function ptr(e){const r=cv.getBoundingClientRect();mx=Math.min(W-PR,Math.max(PR,(e.clientX-r.left)/S));my=Math.min(H-PR,Math.max(H/2+PR,(e.clientY-r.top)/S));moved=1}
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptr(e)});cv.addEventListener('pointermove',ptr);
+let lx=0,ly=0,drag=0;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
+cv.addEventListener('pointermove',e=>{if(!drag)return;mx=Math.min(W-PR,Math.max(PR,mx+(e.clientX-lx)/S));my=Math.min(H-PR,Math.max(H/2+PR,my+(e.clientY-ly)/S));lx=e.clientX;ly=e.clientY;moved=1});
+const up=()=>{drag=0};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 function ring(x,y,col){cx.globalAlpha=.16;cx.fillStyle=col;cx.beginPath();cx.arc(x,y,PR+8,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle=col;cx.lineWidth=6;cx.beginPath();cx.arc(x,y,PR-3,0,7);cx.fill();cx.stroke();
  cx.fillStyle=col;cx.beginPath();cx.arc(x,y,13,0,7);cx.fill()}
