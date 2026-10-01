@@ -18,6 +18,8 @@ h2{margin:0;font-size:22px;font-weight:700}
 .lang span{padding:8px 6px}.lang .a{color:#5a62d6;font-weight:700}
 .spin{width:60px;height:60px;border-radius:50%;border:4px solid #8b6cff33;border-top-color:#22d3ee;animation:r 1s linear infinite}
 @keyframes r{to{transform:rotate(360deg)}}
+.spin.ok{animation:none;border-color:#34d399}
+.mid{font-size:11px;color:#a0a8c8;letter-spacing:.12em;direction:ltr}
 .hint{font-size:13px;color:#8a93b8;min-height:18px}
 #gm{padding:0}
 #cv{border-radius:26px;box-shadow:0 10px 40px rgba(120,130,230,.22);touch-action:none;background:#fff}
@@ -29,15 +31,15 @@ h2{margin:0;font-size:22px;font-weight:700}
 <button class="b" id="play" data-i="play"></button><button class="b g" id="inv" data-i="inv"></button>
 <div class="lang"><span data-l="fa">فارسی</span>|<span data-l="en">English</span></div></div>
 <div id="jn" class="s"><h2 data-i="jt"></h2><button class="b" id="jc" data-i="jc"></button><button class="b g" id="ck" data-i="ck"></button><div class="hint" id="jh"></div></div>
-<div id="wt" class="s"><div class="spin"></div><h2 id="wtx"></h2><button class="b" id="rdy" hidden></button><button class="b g" id="inv2" data-i="inv"></button></div>
+<div id="wt" class="s"><div class="spin"></div><h2 id="wtx"></h2><div class="hint" id="wh"></div><button class="b" id="rdy" hidden></button><button class="b g" id="inv2" data-i="inv"></button><div class="mid" id="mc"></div></div>
 <div id="gm" class="s"><canvas id="cv"></canvas><div id="cdn" hidden></div></div>
 <div id="dc" class="s"><h2 id="dm"></h2><button class="b" data-x data-i="ex"></button></div>
 <div id="ov" class="s"><div id="res"></div><div id="scr"></div><button class="b" id="re" data-i="re"></button><button class="b g" data-x data-i="ex"></button></div>
 <script>
 const tg=window.Telegram&&Telegram.WebApp;try{tg.ready();tg.expand();tg.disableVerticalSwipes()}catch(e){}
 const W=400,H=700,PR=34,UR=19,GOAL=150,$=i=>document.getElementById(i);
-const L={en:{sub:'AIR HOCKEY',play:'Play',inv:'Invite Friend',wait:'Waiting for opponent...',joined:'Opponent joined',ready:'PLAY',wr:'Waiting...',jt:'Join our channel to play',jc:'Join Channel',ck:'Check Again',nj:"You haven't joined yet",dcm:'Opponent disconnected',full:'This match is full',win:'YOU WIN',lose:'YOU LOSE',re:'Rematch',ex:'Exit',go:'GO'},
-fa:{sub:'ایر هاکی',play:'بازی',inv:'دعوت دوست',wait:'در انتظار حریف...',joined:'حریف وارد شد',ready:'شروع',wr:'منتظر...',jt:'برای بازی، عضو کانال شوید',jc:'عضویت در کانال',ck:'بررسی دوباره',nj:'هنوز عضو نشده‌اید',dcm:'حریف از بازی خارج شد',full:'این بازی پر است',win:'بردی!',lose:'باختی',re:'بازی مجدد',ex:'خروج',go:'برو'}};
+const L={en:{sub:'AIR HOCKEY',play:'Play',inv:'Invite Friend',wait:'Waiting for opponent...',joined:'Opponent connected ✓',hint:'Send the invite — your friend should join within a minute',ready:'PLAY',wr:'Waiting...',jt:'Join our channel to play',jc:'Join Channel',ck:'Check Again',nj:"You haven't joined yet",dcm:'Opponent disconnected',full:'This match is full',win:'YOU WIN',lose:'YOU LOSE',re:'Rematch',ex:'Exit',go:'GO'},
+fa:{sub:'ایر هاکی',play:'بازی',inv:'دعوت دوست',wait:'در انتظار حریف...',joined:'حریف متصل شد ✓',hint:'دعوت را بفرست؛ دوستت تا حدود یک دقیقه‌ی دیگر می‌رسد',ready:'شروع',wr:'منتظر...',jt:'برای بازی، عضو کانال شوید',jc:'عضویت در کانال',ck:'بررسی دوباره',nj:'هنوز عضو نشده‌اید',dcm:'حریف از بازی خارج شد',full:'این بازی پر است',win:'بردی!',lose:'باختی',re:'بازی مجدد',ex:'خروج',go:'برو'}};
 let lang='en';try{lang=localStorage.ovlo||'en'}catch(e){}
 const T=k=>L[lang][k];
 function setLang(l){lang=l;try{localStorage.ovlo=l}catch(e){}document.documentElement.dir=l==='fa'?'rtl':'ltr';
@@ -55,7 +57,8 @@ function join(m){id=m;if(ws)ws.close();const s=ws=new WebSocket((location.protoc
  s.onclose=()=>{if(ws===s&&(phase==='play'||phase==='cd')){phase='left';$('dm').textContent=T('dcm');show('dc')}}}
 const out=m=>ws&&ws.readyState===1&&ws.send(JSON.stringify(m));
 function invite(){const q='m_'+id;if(tg&&tg.switchInlineQuery)tg.switchInlineQuery(q,['users','groups','channels']);else prompt('Link',location.origin+'/?m='+id)}
-function uiRoom(m){$('wtx').textContent=T(m.n>1?'joined':'wait');const b=$('rdy');b.hidden=m.n<2;b.disabled=!!m.ready[m.idx];b.textContent=T(m.ready[m.idx]?'wr':'ready');
+function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh').textContent=j?'':T('hint');
+ $('wt').querySelector('.spin').classList.toggle('ok',j);$('mc').textContent='#'+id.slice(-4);const b=$('rdy');b.hidden=m.n<2;b.disabled=!!m.ready[m.idx];b.textContent=T(m.ready[m.idx]?'wr':'ready');
  $('re').disabled=!!m.ready[m.idx]}
 function on(m){switch(m.t){
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T(m.c==='full'?'full':'dcm');show('dc')}break;
