@@ -38,8 +38,8 @@ h2{margin:0;font-size:22px;font-weight:700}
 <script>
 const tg=window.Telegram&&Telegram.WebApp;try{tg.ready();tg.expand();tg.disableVerticalSwipes()}catch(e){}
 const W=400,H=700,PR=34,UR=19,GOAL=150,$=i=>document.getElementById(i);
-const L={en:{sub:'AIR HOCKEY',play:'Play',inv:'Invite Friend',wait:'Waiting for opponent...',joined:'Opponent connected ✓',hint:'Send the invite — your friend should join within a minute',ready:'PLAY',wr:'Waiting...',jt:'Join our channel to play',jc:'Join Channel',ck:'Check Again',nj:"You haven't joined yet",dcm:'Opponent disconnected',full:'This match is full',win:'YOU WIN',lose:'YOU LOSE',re:'Rematch',ex:'Exit',go:'GO'},
-fa:{sub:'ایر هاکی',play:'بازی',inv:'دعوت دوست',wait:'در انتظار حریف...',joined:'حریف متصل شد ✓',hint:'دعوت را بفرست؛ دوستت تا حدود یک دقیقه‌ی دیگر می‌رسد',ready:'شروع',wr:'منتظر...',jt:'برای بازی، عضو کانال شوید',jc:'عضویت در کانال',ck:'بررسی دوباره',nj:'هنوز عضو نشده‌اید',dcm:'حریف از بازی خارج شد',full:'این بازی پر است',win:'بردی!',lose:'باختی',re:'بازی مجدد',ex:'خروج',go:'برو'}};
+const L={en:{sub:'AIR HOCKEY',play:'Play',inv:'Invite Friend',wait:'Waiting for opponent...',joined:'Opponent connected ✓',conn:'Connecting...',hint:'Send the invite — your friend should join within a minute',ready:'PLAY',wr:'Waiting...',jt:'Join our channel to play',jc:'Join Channel',ck:'Check Again',nj:"You haven't joined yet",dcm:'Opponent disconnected',full:'This match is full',win:'YOU WIN',lose:'YOU LOSE',re:'Rematch',ex:'Exit',go:'GO'},
+fa:{sub:'ایر هاکی',play:'بازی',inv:'دعوت دوست',wait:'در انتظار حریف...',joined:'حریف متصل شد ✓',conn:'در حال اتصال...',hint:'دعوت را بفرست؛ دوستت تا حدود یک دقیقه‌ی دیگر می‌رسد',ready:'شروع',wr:'منتظر...',jt:'برای بازی، عضو کانال شوید',jc:'عضویت در کانال',ck:'بررسی دوباره',nj:'هنوز عضو نشده‌اید',dcm:'حریف از بازی خارج شد',full:'این بازی پر است',win:'بردی!',lose:'باختی',re:'بازی مجدد',ex:'خروج',go:'برو'}};
 let lang='en';try{lang=localStorage.ovlo||'en'}catch(e){}
 const T=k=>L[lang][k];
 function setLang(l){lang=l;try{localStorage.ovlo=l}catch(e){}document.documentElement.dir=l==='fa'?'rtl':'ltr';
@@ -51,7 +51,8 @@ const show=i=>document.querySelectorAll('.s').forEach(e=>e.classList.toggle('on'
 
 let ws=null,id='',idx=0,phase='home',pend=0,roomMsg=null,buf=[],sc=[0,0],tm=180;
 const rid=()=>[...crypto.getRandomValues(new Uint8Array(5))].map(b=>b.toString(16).padStart(2,'0')).join('');
-function join(m){id=m;if(ws)ws.close();const s=ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+function join(m){id=m;roomMsg=null;show('wt');$('wtx').textContent=T('conn');$('wh').textContent='';$('rdy').hidden=true;$('mc').textContent='#'+m.slice(-4);
+ if(ws)ws.close();const s=ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
  s.onopen=()=>s.send(JSON.stringify({t:'join',id,init:tg?tg.initData:''}));
  s.onmessage=e=>on(JSON.parse(e.data));
  s.onclose=()=>{if(ws===s&&(phase==='play'||phase==='cd')){phase='left';$('dm').textContent=T('dcm');show('dc')}}}
@@ -103,15 +104,15 @@ function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd'
  cx.textAlign='center';cx.fillStyle='rgba(120,130,210,.16)';cx.font='800 120px system-ui';
  cx.fillText(sc[1],W/2,H/2-60);cx.fillText(sc[0],W/2,H/2+160);
  cx.textAlign='right';cx.fillStyle='#8a93b8';cx.font='600 15px system-ui';cx.fillText(Math.floor(tm/60)+':'+String(tm%60).padStart(2,'0'),W-14,H/2-10);
- let k=[W/2,H/2],op=[W/2,90];
- if(buf.length){const rt=now-90;let a=buf[0],b=buf[0];
+ let k=[W/2,H/2],op=[W/2,90],me=[W/2,H-90];
+ if(buf.length){const rt=now-100;let a=buf[0],b=buf[0];
   for(let i=buf.length-1;i>=0;i--)if(buf[i].t<=rt){a=buf[i];b=buf[i+1]||a;break}
   if(buf[0].t>rt)a=b=buf[0];const t=b.t>a.t?Math.min(1,(rt-a.t)/(b.t-a.t)):0;
-  k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)]}
+  k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
- ring(mx,my,'#18b6e8');
+ ring(me[0],me[1],'#18b6e8');
  if(moved&&phase==='play'&&now-lastSend>33){lastSend=now;moved=0;out({t:'m',x:Math.round(mx),y:Math.round(my)})}}
 setLang(lang);fit();requestAnimationFrame(frame);
 const sp=(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.start_param)||new URLSearchParams(location.search).get('m');
