@@ -4,7 +4,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit', LINK = E.APP_LINK || '', PORT = E.PORT || 3000;
-const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1500;
+const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1200;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
 
@@ -47,9 +47,12 @@ function movePads(r, dt) {
   r.pd.forEach((p, i) => {
     const y0 = i ? PR : H / 2 + PR, y1 = i ? H / 2 - PR : H - PR;
     const tx = Math.min(W - PR, Math.max(PR, p.tx)), ty = Math.min(y1, Math.max(y0, p.ty));
-    let dx = tx - p.x, dy = ty - p.y; const d = Math.hypot(dx, dy), m = PMAX * dt;
+    p.x0 = p.x; p.y0 = p.y;
+    const a = 1 - Math.exp(-28 * dt);
+    let dx = (tx - p.x) * a, dy = (ty - p.y) * a; const d = Math.hypot(dx, dy), m = PMAX * dt;
     if (d > m) { dx *= m / d; dy *= m / d; }
-    p.vx = dx / dt; p.vy = dy / dt; p.x += dx; p.y += dy;
+    p.x += dx; p.y += dy;
+    p.vx += (dx / dt - p.vx) * .5; p.vy += (dy / dt - p.vy) * .5;
   });
 }
 function hit(k, cx, cy, r, vx, vy, e) {
@@ -65,7 +68,8 @@ function puck(r, dt) {
   const k = r.pk, n = 4, h = dt / n, px = [W / 2 - GOAL / 2, W / 2 + GOAL / 2];
   for (let s = 0; s < n; s++) {
     k.x += k.vx * h; k.y += k.vy * h; const f = Math.exp(-.35 * h); k.vx *= f; k.vy *= f;
-    r.pd.forEach(p => hit(k, p.x, p.y, PR + UR, p.vx, p.vy, .85));
+    const q = (s + 1) / n;
+    r.pd.forEach(p => hit(k, p.x0 + (p.x - p.x0) * q, p.y0 + (p.y - p.y0) * q, PR + UR, p.vx, p.vy, .78));
     px.forEach(x => { hit(k, x, 0, UR, 0, 0, .9); hit(k, x, H, UR, 0, 0, .9); });
     if (k.x < UR) { k.x = UR; k.vx = Math.abs(k.vx) * .95; } else if (k.x > W - UR) { k.x = W - UR; k.vx = -Math.abs(k.vx) * .95; }
     if (Math.abs(k.x - W / 2) < GOAL / 2) continue;
