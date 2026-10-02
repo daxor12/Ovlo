@@ -60,9 +60,10 @@ function movePads(r, dt) {
     let dx = (tx - p.x) * a, dy = (ty - p.y) * a; const d = Math.hypot(dx, dy), m = PMAX * dt;
     if (d > m) { dx *= m / d; dy *= m / d; }
     p.x += dx; p.y += dy;
-    p.vx += (dx / dt - p.vx) * .5; p.vy += (dy / dt - p.vy) * .5;
+    p.vx += (dx / dt - p.vx) * .15; p.vy += (dy / dt - p.vy) * .15;
   });
 }
+const cv = v => Math.max(-1400, Math.min(1400, v)); // paddle speed used in collisions
 function hit(k, cx, cy, r, vx, vy, e, fr = 0) {
   let dx = k.x - cx, dy = k.y - cy, d = Math.hypot(dx, dy);
   if (d >= r) return;
@@ -81,7 +82,7 @@ function puck(r, dt) {
   for (let s = 0; s < n; s++) {
     k.x += k.vx * h; k.y += k.vy * h; const f = Math.exp(-.35 * h); k.vx *= f; k.vy *= f;
     const q = (s + 1) / n;
-    r.pd.forEach(p => hit(k, p.x0 + (p.x - p.x0) * q, p.y0 + (p.y - p.y0) * q, PR + UR, p.vx, p.vy, .78, .12));
+    r.pd.forEach(p => hit(k, p.x0 + (p.x - p.x0) * q, p.y0 + (p.y - p.y0) * q, PR + UR, cv(p.vx), cv(p.vy), .78));
     px.forEach(x => { hit(k, x, 0, UR, 0, 0, .9); hit(k, x, H, UR, 0, 0, .9); });
     if (k.x < UR) { k.x = UR; k.vx = Math.abs(k.vx) * .95; } else if (k.x > W - UR) { k.x = W - UR; k.vx = -Math.abs(k.vx) * .95; }
     if (Math.abs(k.x - W / 2) < GOAL / 2) continue;
