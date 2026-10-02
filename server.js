@@ -63,13 +63,17 @@ function movePads(r, dt) {
     p.vx += (dx / dt - p.vx) * .5; p.vy += (dy / dt - p.vy) * .5;
   });
 }
-function hit(k, cx, cy, r, vx, vy, e) {
+function hit(k, cx, cy, r, vx, vy, e, fr = 0) {
   let dx = k.x - cx, dy = k.y - cy, d = Math.hypot(dx, dy);
   if (d >= r) return;
   if (d < 1e-6) { dx = 0; dy = 1; d = 1; }
   const nx = dx / d, ny = dy / d; k.x = cx + nx * r; k.y = cy + ny * r;
   const rv = (k.vx - vx) * nx + (k.vy - vy) * ny;
   if (rv < 0) { k.vx -= (1 + e) * rv * nx; k.vy -= (1 + e) * rv * ny; }
+  if (fr) { // light friction: a paddle sliding past the puck drags it along
+    const ax = k.vx - vx, ay = k.vy - vy, an = ax * nx + ay * ny, tx = ax - an * nx, ty = ay - an * ny;
+    k.vx -= tx * fr; k.vy -= ty * fr;
+  }
   const sp = Math.hypot(k.vx, k.vy); if (sp > VMAX) { k.vx *= VMAX / sp; k.vy *= VMAX / sp; }
 }
 function puck(r, dt) {
@@ -77,7 +81,7 @@ function puck(r, dt) {
   for (let s = 0; s < n; s++) {
     k.x += k.vx * h; k.y += k.vy * h; const f = Math.exp(-.35 * h); k.vx *= f; k.vy *= f;
     const q = (s + 1) / n;
-    r.pd.forEach(p => hit(k, p.x0 + (p.x - p.x0) * q, p.y0 + (p.y - p.y0) * q, PR + UR, p.vx, p.vy, .78));
+    r.pd.forEach(p => hit(k, p.x0 + (p.x - p.x0) * q, p.y0 + (p.y - p.y0) * q, PR + UR, p.vx, p.vy, .78, .12));
     px.forEach(x => { hit(k, x, 0, UR, 0, 0, .9); hit(k, x, H, UR, 0, 0, .9); });
     if (k.x < UR) { k.x = UR; k.vx = Math.abs(k.vx) * .95; } else if (k.x > W - UR) { k.x = W - UR; k.vx = -Math.abs(k.vx) * .95; }
     if (Math.abs(k.x - W / 2) < GOAL / 2) continue;
