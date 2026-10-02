@@ -4,7 +4,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit', LINK = E.APP_LINK || '', PORT = E.PORT || 3000;
-const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 3200, VMAX = 950, BOTWAIT = 15000, GRACE = 10000;
+const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 3200, VMAX = 1000,V0 = 600, BOTWAIT = 15000, GRACE = 10000;
 const botWait = () => 8000 + Math.random() * 10000;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
@@ -64,7 +64,7 @@ function movePads(r, dt) {
     p.vx += (dx / dt - p.vx) * .6; p.vy += (dy / dt - p.vy) * .6;
   });
 }
-const cv = v => Math.max(-1400, Math.min(1400, v)); // paddle speed used in collisions
+const cv = v => Math.max(-1300, Math.min(1300, v)); // paddle speed used in collisions
 function hit(k, cx, cy, r, vx, vy, e, fr = 0) {
   let dx = k.x - cx, dy = k.y - cy, d = Math.hypot(dx, dy);
   if (d >= r) return;
@@ -76,7 +76,7 @@ function hit(k, cx, cy, r, vx, vy, e, fr = 0) {
     const ax = k.vx - vx, ay = k.vy - vy, an = ax * nx + ay * ny, tx = ax - an * nx, ty = ay - an * ny;
     k.vx -= tx * fr; k.vy -= ty * fr;
   }
-  const sp = Math.hypot(k.vx, k.vy); if (sp > VMAX) { k.vx *= VMAX / sp; k.vy *= VMAX / sp; }
+  const sp = Math.hypot(k.vx, k.vy); if (sp > V0) { const c = V0 + (VMAX - V0) * (1 - Math.exp(-(sp - V0) / (VMAX - V0))); k.vx *= c / sp; k.vy *= c / sp; } // soft cap: harder hit = faster puck
 }
 function puck(r, dt) {
   const k = r.pk, n = 4, h = dt / n, px = [W / 2 - GOAL / 2, W / 2 + GOAL / 2];
@@ -92,48 +92,42 @@ function puck(r, dt) {
   if (k.y < -UR) goal(r, 0); else if (k.y > H + UR) goal(r, 1);
 }
 function bot(r, dt) {
-  const i = r.bi, b = r.pd[i], k = r.pk, s = i ? 1 : -1; // s=+1: bot defends y=0, attacks toward +y
-  const ph = () => Math.random() * 6.28;
-  const B = r.bk || (r.bk = { x: k.x, y: k.y, ox: 0, oxt: 0, oy: 0, oyt: 0, t: 0, m: 0, mn: 0, side: b.x >= k.x ? 1 : -1, tx: b.x, ty: b.y, vx: 0, vy: 0,
-    T: 0, ph: [ph(), ph(), ph(), ph(), ph(), ph()], pow: .8, aim: 0, blind: 0, bx: 0, rolled: 0, wait: .3 + Math.random() * .5 });
-  if ((B.wait -= dt) > 0) { b.tx = b.x; b.ty = b.y; return; }                 // like a person: a short beat before moving after "GO"
+  const i = r.bi, b = r.pd[i], k = r.pk, sg = i ? 1 : -1;
+  const T = (x, y) => i ? [x, y] : [W - x, H - y];                            // table <-> bot frame (bot defends y=0, attacks +y)
+  const [bx, by] = T(b.x, b.y);
+  const B = r.bk || (r.bk = { h: [], vx: 0, vy: 0, tx: bx, ty: by, T: 0, ph: Math.random() * 6.28, wait: .3 + Math.random() * .5, err: 0, rolled: 0, att: 0, m: 0, pow: .8, aim: 0, side: 1 });
+  if ((B.wait -= dt) > 0) { b.tx = b.x; b.ty = b.y; return; }                 // a short beat after "GO"
   B.T += dt;
-  const nz = (f, p) => Math.sin(B.T * f + B.ph[p]) * .6 + Math.sin(B.T * f * 2.3 + B.ph[p + 1]) * .4; // smooth wobble in [-1,1]
-  const lead = r.sc[i] - r.sc[1 - i], skill = Math.min(1.3, Math.max(.7, 1 - lead * .15)); // eases off when ahead, tries harder when behind
-  const spd = Math.hypot(k.vx, k.vy);
-  const tau = .17 / skill * (1 + .2 * nz(.7, 0)), a = 1 - Math.exp(-dt / tau);  // reaction time varies
-  B.x += (k.x - B.x) * a; B.y += (k.y - B.y) * a;
-  if ((B.t -= dt) <= 0) { B.t = .4 + Math.random() * .4; const am = 10 + spd * .025; B.oxt = (Math.random() - .5) * 2 * am; B.oyt = (Math.random() - .5) * am; } // aim error grows with puck speed
-  const ee = 1 - Math.exp(-5 * dt); B.ox += (B.oxt - B.ox) * ee; B.oy += (B.oyt - B.oy) * ee;
-  const px = B.x + B.ox, py = B.y + B.oy;
-  const dh = i ? H / 2 - py : py - H / 2;                                     // >0: puck on bot's half
-  if (!B.mn && dh > 10) { B.mn = 1; B.pow = .7 + .3 * Math.random(); B.aim = (Math.random() - .5) * 110; } else if (B.mn && dh < -10) B.mn = 0; // hysteresis: no flip-flopping
-  const toward = -s * k.vy;                                                   // >0: puck heading for the bot's goal
-  if (B.blind > 0) B.blind -= dt;
-  if (toward > 450 && dh > 0 && !B.rolled) { B.rolled = 1; if (Math.random() < (.05 + .12 * spd / VMAX) / skill) { B.blind = .5; B.bx = (Math.random() < .5 ? -1 : 1) * (35 + Math.random() * 45); } } // occasionally misreads a fast shot
-  else if (toward < 100) B.rolled = 0;
-  let tx, ty;
-  if (B.mn) {
-    const gy = i ? H : 0, ux0 = W / 2 + B.aim - px, uy0 = gy - py, ul = Math.hypot(ux0, uy0) || 1, ux = ux0 / ul, uy = uy0 / ul;
-    const beh = s * (py - b.y);                                               // >0: bot is behind the puck
-    if (!B.m && beh > 14) B.m = 1; else if (B.m && beh < -10) { B.m = 0; B.side = b.x >= px ? 1 : -1; }
-    if (B.m) { tx = px + ux * 30; ty = py + uy * 30; }                        // behind puck: hit it toward a chosen spot in the goal
-    else { tx = px - ux * 60 + B.side * 70; ty = py - uy * 60; }              // go around to get behind it
-  } else {                                                                    // defend, with a little drift
-    B.m = 0;
-    tx = W / 2 + (px - W / 2) * .35 + nz(.4, 2) * 10 + (B.blind > 0 ? B.bx : 0);
-    ty = (i ? 95 : H - 95) + (spd < 250 ? s * 30 : 0);
+  const lead = r.sc[i] - r.sc[1 - i], skill = Math.min(1.25, Math.max(.75, 1 - lead * .12)); // eases off when ahead
+  B.h.push([k.x, k.y, k.vx, k.vy]); while (B.h.length > Math.round(.14 / skill / dt) + 1) B.h.shift(); // true reaction delay (~140ms)
+  const o = B.h[0], [qx, qy] = T(o[0], o[1]), vx = sg * o[2], vy = sg * o[3], spd = Math.hypot(vx, vy);
+  const px = qx + Math.sin(B.T * 1.7 + B.ph) * 5, py = qy + Math.sin(B.T * 1.3 + B.ph * 2) * 5, wob = Math.sin(B.T * .9 + B.ph);
+  const coming = vy < -120 && py > by - 10;                                    // puck heading for the bot's goal
+  if (!coming) B.rolled = 0;
+  let tx, ty, rate = 14, vmax = 700;
+  if (py < H / 2 - 8 && (!coming || spd < 380)) {                              // ATTACK: puck on my half and not rushing me
+    if (!B.att) { B.att = 1; B.m = 0; B.pow = .5 + .5 * Math.random(); B.aim = (Math.random() - .5) * 110; B.side = bx >= px ? 1 : -1; }
+    const ux0 = W / 2 + B.aim - px, uy0 = H - py, ul = Math.hypot(ux0, uy0) || 1, ux = ux0 / ul, uy = uy0 / ul, beh = py - by;
+    if (!B.m && beh > 14) B.m = 1; else if (B.m && beh < -10) { B.m = 0; B.side = bx >= px ? 1 : -1; }
+    if (B.m) { tx = px + ux * 28; ty = py + uy * 28; } else { tx = px - ux * 60 + B.side * 70; ty = py - uy * 60; }
+    vmax = (480 + 620 * B.pow) * Math.min(1.12, skill); rate = 18;
+  } else {
+    B.att = 0;
+    if (coming) {                                                              // DEFEND: go to the predicted intercept (with wall bounces)
+      if (!B.rolled) { B.rolled = 1; const f = spd / VMAX; B.err = (Math.random() - .5) * (14 + 40 * f); if (Math.random() < (.04 + .1 * f) / skill) B.err += (Math.random() < .5 ? -1 : 1) * (45 + Math.random() * 40); }
+      const t = Math.max(0, py - 85) / -vy, w = W - 2 * UR;
+      let x = (px + vx * t - UR) % (2 * w); if (x < 0) x += 2 * w;
+      tx = UR + (x > w ? 2 * w - x : x) + B.err; ty = 85; vmax = 1150 * skill; rate = 24;
+    } else { tx = W / 2 + (px - W / 2) * .55 + wob * 12; ty = 90 + (spd < 250 ? 25 : 0); } // idle: shadow the puck loosely
   }
-  const y0 = i ? PR : H / 2 + PR, y1 = i ? H / 2 - PR : H - PR;
-  tx = Math.min(W - PR, Math.max(PR, tx)); ty = Math.min(y1, Math.max(y0, ty));
-  const g = 1 - Math.exp(-14 * dt); B.tx += (tx - B.tx) * g; B.ty += (ty - B.ty) * g; // smooth the target itself
-  // "hand" model: speed-limited, acceleration-limited, eases into the target -> curved, human-looking paths
-  const vmax = (650 + 400 * B.pow) * Math.min(1.15, skill);
-  const ex = B.tx - b.x, ey = B.ty - b.y, d = Math.hypot(ex, ey) || 1e-6, sp = Math.min(vmax, d * 12);
+  tx = Math.min(W - PR, Math.max(PR, tx)); ty = Math.min(H / 2 - PR, Math.max(PR, ty));
+  const g = 1 - Math.exp(-rate * dt); B.tx += (tx - B.tx) * g; B.ty += (ty - B.ty) * g;
+  // "hand" model: speed- and acceleration-limited
+  const ex = B.tx - bx, ey = B.ty - by, d = Math.hypot(ex, ey) || 1e-6, sp = Math.min(vmax, d * 12);
   let wx = ex / d * sp - B.vx, wy = ey / d * sp - B.vy; const wl = Math.hypot(wx, wy), am = 10000 * dt;
   if (wl > am) { wx *= am / wl; wy *= am / wl; }
   B.vx += wx; B.vy += wy;
-  const q = dt / (1 - Math.exp(-60 * dt)); b.tx = b.x + B.vx * q; b.ty = b.y + B.vy * q; // movePads moves ~63% of the gap per tick
+  const q = dt / (1 - Math.exp(-60 * dt)), [nx, ny] = T(bx + B.vx * q, by + B.vy * q); b.tx = nx; b.ty = ny; // movePads moves ~63% of the gap per tick
 }
 function step(r) {
   if (r.pl.some(p => p && p.gone)) return; // paused while a player reconnects
