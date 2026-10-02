@@ -92,16 +92,23 @@ function puck(r, dt) {
 }
 function bot(r, dt) {
   const i = r.bi, b = r.pd[i], k = r.pk, s = i ? 1 : -1; // s=+1: bot defends y=0, attacks toward +y
-  const B = r.bk || (r.bk = { x: k.x, y: k.y, ox: 0, t: 0 });
+  const B = r.bk || (r.bk = { x: k.x, y: k.y, ox: 0, oxt: 0, t: 0, m: 0, mn: 0, side: b.x >= k.x ? 1 : -1, tx: b.x, ty: b.y });
   const a = 1 - Math.exp(-6 * dt); B.x += (k.x - B.x) * a; B.y += (k.y - B.y) * a; // ~160ms reaction
-  if ((B.t -= dt) <= 0) { B.t = .4; B.ox = (Math.random() - .5) * 28; }      // small aiming error
-  const px = B.x + B.ox, py = B.y, mine = i ? py < H / 2 : py > H / 2;
+  if ((B.t -= dt) <= 0) { B.t = .5; B.oxt = (Math.random() - .5) * 28; }     // small aiming error, eased in (no jumps)
+  B.ox += (B.oxt - B.ox) * (1 - Math.exp(-5 * dt));
+  const px = B.x + B.ox, py = B.y;
+  // hysteresis on every mode switch so the bot never flip-flops between targets (that was the jitter)
+  const dh = i ? H / 2 - py : py - H / 2;                                     // >0: puck on bot's half
+  if (!B.mn && dh > 10) B.mn = 1; else if (B.mn && dh < -10) B.mn = 0;
   let tx, ty;
-  if (mine) {
-    if (s * (py - b.y) > 6) { tx = px; ty = py + s * 30; }                     // behind puck: drive through it
-    else { tx = px + (b.x >= px ? 70 : -70); ty = py - s * 60; }               // go around to get behind it
-  } else { tx = W / 2 + (px - W / 2) * .35; ty = i ? 95 : H - 95; }            // defend
-  let dx = tx - b.x, dy = ty - b.y; const d = Math.hypot(dx, dy), m = 1000 * dt / (1 - Math.exp(-60 * dt)); // ~1000 u/s max
+  if (B.mn) {
+    const beh = s * (py - b.y);                                               // >0: bot is behind the puck
+    if (!B.m && beh > 14) B.m = 1; else if (B.m && beh < -10) { B.m = 0; B.side = b.x >= px ? 1 : -1; }
+    if (B.m) { tx = px; ty = py + s * 30; }                                   // behind puck: drive through it
+    else { tx = px + B.side * 70; ty = py - s * 60; }                         // go around to get behind it
+  } else { B.m = 0; tx = W / 2 + (px - W / 2) * .35; ty = i ? 95 : H - 95; }  // defend
+  const g = 1 - Math.exp(-14 * dt); B.tx += (tx - B.tx) * g; B.ty += (ty - B.ty) * g; // smooth the target itself
+  let dx = B.tx - b.x, dy = B.ty - b.y; const d = Math.hypot(dx, dy), m = 1000 * dt / (1 - Math.exp(-60 * dt)); // ~1000 u/s max
   if (d > m) { dx *= m / d; dy *= m / d; }
   b.tx = b.x + dx; b.ty = b.y + dy;
 }
