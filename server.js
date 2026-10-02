@@ -4,7 +4,8 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit', LINK = E.APP_LINK || '', PORT = E.PORT || 3000;
-const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 3200, VMAX = 1200, BOTWAIT = 15000, GRACE = 10000;
+const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 3200, VMAX = 950, BOTWAIT = 15000, GRACE = 10000;
+const botWait = () => 8000 + Math.random() * 10000;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
 
@@ -92,25 +93,47 @@ function puck(r, dt) {
 }
 function bot(r, dt) {
   const i = r.bi, b = r.pd[i], k = r.pk, s = i ? 1 : -1; // s=+1: bot defends y=0, attacks toward +y
-  const B = r.bk || (r.bk = { x: k.x, y: k.y, ox: 0, oxt: 0, t: 0, m: 0, mn: 0, side: b.x >= k.x ? 1 : -1, tx: b.x, ty: b.y });
-  const a = 1 - Math.exp(-6 * dt); B.x += (k.x - B.x) * a; B.y += (k.y - B.y) * a; // ~160ms reaction
-  if ((B.t -= dt) <= 0) { B.t = .5; B.oxt = (Math.random() - .5) * 28; }     // small aiming error, eased in (no jumps)
-  B.ox += (B.oxt - B.ox) * (1 - Math.exp(-5 * dt));
-  const px = B.x + B.ox, py = B.y;
-  // hysteresis on every mode switch so the bot never flip-flops between targets (that was the jitter)
+  const ph = () => Math.random() * 6.28;
+  const B = r.bk || (r.bk = { x: k.x, y: k.y, ox: 0, oxt: 0, oy: 0, oyt: 0, t: 0, m: 0, mn: 0, side: b.x >= k.x ? 1 : -1, tx: b.x, ty: b.y, vx: 0, vy: 0,
+    T: 0, ph: [ph(), ph(), ph(), ph(), ph(), ph()], pow: .8, aim: 0, blind: 0, bx: 0, rolled: 0, wait: .3 + Math.random() * .5 });
+  if ((B.wait -= dt) > 0) { b.tx = b.x; b.ty = b.y; return; }                 // like a person: a short beat before moving after "GO"
+  B.T += dt;
+  const nz = (f, p) => Math.sin(B.T * f + B.ph[p]) * .6 + Math.sin(B.T * f * 2.3 + B.ph[p + 1]) * .4; // smooth wobble in [-1,1]
+  const lead = r.sc[i] - r.sc[1 - i], skill = Math.min(1.3, Math.max(.7, 1 - lead * .15)); // eases off when ahead, tries harder when behind
+  const spd = Math.hypot(k.vx, k.vy);
+  const tau = .17 / skill * (1 + .2 * nz(.7, 0)), a = 1 - Math.exp(-dt / tau);  // reaction time varies
+  B.x += (k.x - B.x) * a; B.y += (k.y - B.y) * a;
+  if ((B.t -= dt) <= 0) { B.t = .4 + Math.random() * .4; const am = 10 + spd * .025; B.oxt = (Math.random() - .5) * 2 * am; B.oyt = (Math.random() - .5) * am; } // aim error grows with puck speed
+  const ee = 1 - Math.exp(-5 * dt); B.ox += (B.oxt - B.ox) * ee; B.oy += (B.oyt - B.oy) * ee;
+  const px = B.x + B.ox, py = B.y + B.oy;
   const dh = i ? H / 2 - py : py - H / 2;                                     // >0: puck on bot's half
-  if (!B.mn && dh > 10) B.mn = 1; else if (B.mn && dh < -10) B.mn = 0;
+  if (!B.mn && dh > 10) { B.mn = 1; B.pow = .7 + .3 * Math.random(); B.aim = (Math.random() - .5) * 110; } else if (B.mn && dh < -10) B.mn = 0; // hysteresis: no flip-flopping
+  const toward = -s * k.vy;                                                   // >0: puck heading for the bot's goal
+  if (B.blind > 0) B.blind -= dt;
+  if (toward > 450 && dh > 0 && !B.rolled) { B.rolled = 1; if (Math.random() < (.05 + .12 * spd / VMAX) / skill) { B.blind = .5; B.bx = (Math.random() < .5 ? -1 : 1) * (35 + Math.random() * 45); } } // occasionally misreads a fast shot
+  else if (toward < 100) B.rolled = 0;
   let tx, ty;
   if (B.mn) {
+    const gy = i ? H : 0, ux0 = W / 2 + B.aim - px, uy0 = gy - py, ul = Math.hypot(ux0, uy0) || 1, ux = ux0 / ul, uy = uy0 / ul;
     const beh = s * (py - b.y);                                               // >0: bot is behind the puck
     if (!B.m && beh > 14) B.m = 1; else if (B.m && beh < -10) { B.m = 0; B.side = b.x >= px ? 1 : -1; }
-    if (B.m) { tx = px; ty = py + s * 30; }                                   // behind puck: drive through it
-    else { tx = px + B.side * 70; ty = py - s * 60; }                         // go around to get behind it
-  } else { B.m = 0; tx = W / 2 + (px - W / 2) * .35; ty = i ? 95 : H - 95; }  // defend
+    if (B.m) { tx = px + ux * 30; ty = py + uy * 30; }                        // behind puck: hit it toward a chosen spot in the goal
+    else { tx = px - ux * 60 + B.side * 70; ty = py - uy * 60; }              // go around to get behind it
+  } else {                                                                    // defend, with a little drift
+    B.m = 0;
+    tx = W / 2 + (px - W / 2) * .35 + nz(.4, 2) * 10 + (B.blind > 0 ? B.bx : 0);
+    ty = (i ? 95 : H - 95) + (spd < 250 ? s * 30 : 0);
+  }
+  const y0 = i ? PR : H / 2 + PR, y1 = i ? H / 2 - PR : H - PR;
+  tx = Math.min(W - PR, Math.max(PR, tx)); ty = Math.min(y1, Math.max(y0, ty));
   const g = 1 - Math.exp(-14 * dt); B.tx += (tx - B.tx) * g; B.ty += (ty - B.ty) * g; // smooth the target itself
-  let dx = B.tx - b.x, dy = B.ty - b.y; const d = Math.hypot(dx, dy), m = 1000 * dt / (1 - Math.exp(-60 * dt)); // ~1000 u/s max
-  if (d > m) { dx *= m / d; dy *= m / d; }
-  b.tx = b.x + dx; b.ty = b.y + dy;
+  // "hand" model: speed-limited, acceleration-limited, eases into the target -> curved, human-looking paths
+  const vmax = (650 + 400 * B.pow) * Math.min(1.15, skill);
+  const ex = B.tx - b.x, ey = B.ty - b.y, d = Math.hypot(ex, ey) || 1e-6, sp = Math.min(vmax, d * 12);
+  let wx = ex / d * sp - B.vx, wy = ey / d * sp - B.vy; const wl = Math.hypot(wx, wy), am = 10000 * dt;
+  if (wl > am) { wx *= am / wl; wy *= am / wl; }
+  B.vx += wx; B.vy += wy;
+  const q = dt / (1 - Math.exp(-60 * dt)); b.tx = b.x + B.vx * q; b.ty = b.y + B.vy * q; // movePads moves ~63% of the gap per tick
 }
 function step(r) {
   if (r.pl.some(p => p && p.gone)) return; // paused while a player reconnects
@@ -142,8 +165,12 @@ setInterval(() => { for (const [k, r] of rooms) if (Date.now() - r.act > 18e5 ||
 
 setInterval(() => {
   const t = Date.now();
-  for (const r of rooms.values()) if (r.pub && r.phase === 'wait' && !r.bot && r.botAt <= t && r.pl.filter(Boolean).length === 1) {
-    r.bi = r.pl[0] ? 1 : 0; r.bot = 1; r.pl[r.bi] = { uid: 'bot', ws: { readyState: 3, send() { }, close() { } } }; r.ready[r.bi] = 1; info(r);
+  for (const r of rooms.values()) {
+    if (r.pub && r.phase === 'wait' && !r.bot && r.botAt <= t && r.pl.filter(Boolean).length === 1) {
+      r.bi = r.pl[0] ? 1 : 0; r.bot = 1; r.pl[r.bi] = { uid: 'bot', ws: { readyState: 3, send() { }, close() { } } }; r.ready[r.bi] = 0; r.brAt = t + 1500 + Math.random() * 3500; info(r);
+    } else if (r.bot && r.brAt && r.brAt <= t && r.phase === 'wait') { // opponent "presses ready" after a human-like delay
+      r.brAt = 0; r.ready[r.bi] = 1; if (r.ready[0] && r.ready[1]) start(r); else info(r);
+    }
   }
 }, 500);
 const err = c => JSON.stringify({ t: 'err', c });
@@ -154,6 +181,7 @@ wss.on('connection', ws => {
   let r = null, i = -1;
   ws.on('message', async raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
+    if (m.t === 'p') { if (typeof m.c === 'number') ws.send(JSON.stringify({ t: 'pong', c: m.c })); return; }
     if (m.t === 'join' && !r) {
       if (!m.q && !ID.test(m.id)) return;
       const u = auth(m.init); if (!u) return ws.send(err('auth'));
@@ -164,7 +192,7 @@ wss.on('connection', ws => {
       let room;
       if (m.q) { // quick match: join a waiting public room, else open one (a bot fills in after BOTWAIT)
         room = [...rooms.values()].find(x => x.pub && x.phase === 'wait' && !x.bot && x.pl.filter(Boolean).length === 1 && x.pl.find(Boolean).uid !== u.id);
-        if (!room) { if (rooms.size > 5000) return; room = mk(crypto.randomBytes(5).toString('hex')); room.pub = 1; room.botAt = Date.now() + BOTWAIT; rooms.set(room.id, room); }
+        if (!room) { if (rooms.size > 5000) return; room = mk(crypto.randomBytes(5).toString('hex')); room.pub = 1; room.botAt = Date.now() + botWait(); rooms.set(room.id, room); }
       } else {
         if (!rooms.has(m.id)) { if (rooms.size > 5000) return; rooms.set(m.id, mk(m.id)); }
         room = rooms.get(m.id);
@@ -179,10 +207,10 @@ wss.on('connection', ws => {
       const p = r.pd[i]; p.tx = i ? W - m.x : m.x; p.ty = i ? H - m.y : m.y;
     } else if (m.t === 'ready' && (r.phase === 'wait' || r.phase === 'over') && r.pl[0] && r.pl[1]) {
       if (r.bot && r.phase === 'over') { // rematch after a bot game goes back to the queue
-        r.pl[r.bi] = null; r.bot = 0; r.bk = null; r.phase = 'wait'; r.ready = [0, 0]; r.sc = [0, 0]; r.botAt = Date.now() + BOTWAIT; r.act = Date.now();
+        r.pl[r.bi] = null; r.bot = 0; r.bk = null; r.phase = 'wait'; r.ready = [0, 0]; r.sc = [0, 0]; r.botAt = Date.now() + botWait(); r.act = Date.now();
         return info(r);
       }
-      r.ready[i] = 1; if (r.bot) r.ready[r.bi] = 1; r.act = Date.now();
+      r.ready[i] = 1; r.act = Date.now();
       if (r.ready[0] && r.ready[1]) start(r); else info(r);
     }
   });
@@ -196,7 +224,7 @@ wss.on('connection', ws => {
     r.pl[i] = null; r.ready = [0, 0]; r.act = Date.now();
     if (['count', 'play', 'over'].includes(r.phase)) { send(r, { t: 'left' }); rooms.delete(r.id); }
     else if (r.pub && (r.bot || (!r.pl[0] && !r.pl[1]))) rooms.delete(r.id);
-    else { r.phase = 'wait'; if (r.pub) r.botAt = Date.now() + BOTWAIT; info(r); }
+    else { r.phase = 'wait'; if (r.pub) r.botAt = Date.now() + botWait(); info(r); }
   });
 });
 srv.listen(PORT, () => console.log('OVLO on :' + PORT));
