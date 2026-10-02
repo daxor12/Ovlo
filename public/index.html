@@ -65,8 +65,8 @@ function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh
  $('re').disabled=!!m.ready[m.idx]}
 function on(m){switch(m.t){
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T({full:'full',busy:'busy',auth:'tg'}[m.c]||'dcm');show('dc')}break;
- case 'room':rc=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
- case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];sc=[0,0];tm=180;mx=W/2;my=H-90}
+ case 'room':rc=0;P.ok=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
+ case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];sc=[0,0];tm=180;mx=W/2;my=H-90;P.ok=0}
   $('cdn').hidden=false;$('cdn').textContent=m.n||T('go');if(!m.n)setTimeout(()=>$('cdn').hidden=true,600);break;
  case 's':phase='play';if(!$('gm').classList.contains('on')){show('gm');fit()}snap(m);break;
  case 'goal':try{tg.HapticFeedback.impactOccurred('medium')}catch(e){}break;
@@ -94,8 +94,26 @@ function table(){const c=ox;c.setTransform(D*S,0,0,D*S,0,0);c.clearRect(0,0,W,H)
  wall('#9b7bff',[[gx,3],[3,3],[3,H/2]]);wall('#9b7bff',[[gy,3],[W-3,3],[W-3,H/2]]);
  wall('#22d3ee',[[3,H/2],[3,H-3],[gx,H-3]]);wall('#22d3ee',[[W-3,H/2],[W-3,H-3],[gy,H-3]]);c.shadowBlur=0}
 const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
-function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:performance.now(),k,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
+function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:performance.now(),k,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();recon(k,m.v?(idx?[-m.v[0],-m.v[1]]:m.v):[0,0],m.z);sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
 let mx=W/2,my=H-90,lastSend=0,moved=0;
+let P={x:W/2,y:H/2,vx:0,vy:0,ok:0,hit:0,z:0},lastT=0,pmx=W/2,pmy=H-90,mvx=0,mvy=0,pop=[W/2,90],ovx=0,ovy=0;
+// local puck prediction: same physics as the server, gently reconciled with its snapshots
+function hc(c,r,vx,vy,e){let dx=P.x-c[0],dy=P.y-c[1],d=Math.hypot(dx,dy);if(d>=r)return 0;if(d<1e-6){dx=0;dy=1;d=1}
+ const nx=dx/d,ny=dy/d;P.x=c[0]+nx*r;P.y=c[1]+ny*r;const rv=(P.vx-vx)*nx+(P.vy-vy)*ny;if(rv<0){P.vx-=(1+e)*rv*nx;P.vy-=(1+e)*rv*ny}
+ const sp=Math.hypot(P.vx,P.vy);if(sp>1200){P.vx*=1200/sp;P.vy*=1200/sp}return 1}
+function sim(dt,op){const n=3,h=dt/n;for(let s=0;s<n;s++){
+ P.x+=P.vx*h;P.y+=P.vy*h;const g=Math.exp(-.35*h);P.vx*=g;P.vy*=g;
+ if(hc([mx,my],PR+UR,mvx,mvy,.78))P.hit=performance.now();
+ hc(op,PR+UR,ovx,ovy,.78);
+ for(const x of[W/2-GOAL/2,W/2+GOAL/2]){hc([x,0],UR,0,0,.9);hc([x,H],UR,0,0,.9)}
+ if(P.x<UR){P.x=UR;P.vx=Math.abs(P.vx)*.95}else if(P.x>W-UR){P.x=W-UR;P.vx=-Math.abs(P.vx)*.95}
+ if(Math.abs(P.x-W/2)>=GOAL/2){if(P.y<UR){P.y=UR;P.vy=Math.abs(P.vy)*.95}else if(P.y>H-UR){P.y=H-UR;P.vy=-Math.abs(P.vy)*.95}}}}
+function recon(k,v,z){const L=.07;P.z=z;
+ if(!P.ok||z){P.x=k[0];P.y=k[1];P.vx=v[0];P.vy=v[1];P.ok=1;return}
+ if(performance.now()-P.hit<300)return;
+ const sx=k[0]+v[0]*L,sy=k[1]+v[1]*L,ex=sx-P.x,ey=sy-P.y;
+ if(Math.hypot(ex,ey)>220){P.x=sx;P.y=sy;P.vx=v[0];P.vy=v[1];return}
+ P.x+=ex*.2;P.y+=ey*.2;P.vx+=(v[0]-P.vx)*.2;P.vy+=(v[1]-P.vy)*.2}
 let lx=0,ly=0,drag=0;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
 cv.addEventListener('pointermove',e=>{if(!drag)return;mx=Math.min(W-PR,Math.max(PR,mx+(e.clientX-lx)/S));my=Math.min(H-PR,Math.max(H/2+PR,my+(e.clientY-ly)/S));lx=e.clientX;ly=e.clientY;moved=1});
@@ -113,6 +131,10 @@ function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd'
   for(let i=buf.length-1;i>=0;i--)if(buf[i].t<=rt){a=buf[i];b=buf[i+1]||a;break}
   if(buf[0].t>rt)a=b=buf[0];const t=b.t>a.t?Math.min(1,(rt-a.t)/(b.t-a.t)):0;
   k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
+ const dt=Math.min(.05,Math.max(.001,(now-lastT)/1000)),cl=v=>Math.max(-2200,Math.min(2200,v));lastT=now;
+ mvx+=(cl((mx-pmx)/dt)-mvx)*.5;mvy+=(cl((my-pmy)/dt)-mvy)*.5;pmx=mx;pmy=my;
+ ovx+=(cl((op[0]-pop[0])/dt)-ovx)*.3;ovy+=(cl((op[1]-pop[1])/dt)-ovy)*.3;pop=[op[0],op[1]];
+ if(P.ok){if(phase==='play'&&!P.z&&P.y>-90&&P.y<H+90)sim(dt,op);k=[P.x,P.y]}
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
