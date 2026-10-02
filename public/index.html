@@ -49,12 +49,12 @@ function setLang(l){lang=l;try{localStorage.ovlo=l}catch(e){}document.documentEl
 document.querySelectorAll('[data-l]').forEach(e=>e.onclick=()=>setLang(e.dataset.l));
 const show=i=>document.querySelectorAll('.s').forEach(e=>e.classList.toggle('on',e.id===i));
 
-let ws=null,id='',idx=0,phase='home',pend=0,qm=0,rc=0,jq=0,roomMsg=null,buf=[],sc=[0,0],tm=180,off=null;
+let L1=0,P=null,pt=0,hitAt=0,pz=0,opv=[0,0],mv=[0,0],pmx=0,pmy=0,ws=null,id='',idx=0,phase='home',pend=0,qm=0,rc=0,jq=0,roomMsg=null,buf=[],sc=[0,0],tm=180,off=null;
 const rid=()=>[...crypto.getRandomValues(new Uint8Array(5))].map(b=>b.toString(16).padStart(2,'0')).join('');
 function join(m,q){id=m;qm=q?1:0;$('inv2').hidden=!!q;roomMsg=null;show('wt');$('wtx').textContent=T('conn');$('wh').textContent='';$('rdy').hidden=true;$('mc').textContent=m?'#'+m.slice(-4):'';
  if(ws)ws.close();rc=0;jq=qm;conn()}
 function conn(){off=null;const s=ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
- s.onopen=()=>s.send(JSON.stringify({t:'join',id,init:tg?tg.initData:'',q:jq}));
+ s.onopen=()=>{out({t:'p',c:Date.now()});s.send(JSON.stringify({t:'join',id,init:tg?tg.initData:'',q:jq}))};
  s.onmessage=e=>on(JSON.parse(e.data));
  s.onclose=()=>{if(ws!==s||(phase!=='play'&&phase!=='cd'))return;
   if(rc<6){rc++;setTimeout(()=>{if(ws===s)conn()},1500)}else{phase='left';$('dm').textContent=T('dcm');show('dc')}}}
@@ -64,9 +64,10 @@ function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh
  $('wt').querySelector('.spin').classList.toggle('ok',j);$('mc').textContent='#'+id.slice(-4);const b=$('rdy');b.hidden=m.n<2;b.disabled=!!m.ready[m.idx];b.textContent=T(m.ready[m.idx]?'wr':'ready');
  $('re').disabled=!!m.ready[m.idx]}
 function on(m){switch(m.t){
+ case 'pong':{const r=(Date.now()-m.c)/2;L1=L1?L1+(r-L1)*.3:r}break;
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T({full:'full',busy:'busy',auth:'tg'}[m.c]||'dcm');show('dc')}break;
  case 'room':rc=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
- case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];bc=[0,0];sc=[0,0];tm=180;mx=W/2;my=H-90}
+ case 'count':phase='cd';show('gm');fit();if(m.n){P=null;buf=[];bc=[0,0];sc=[0,0];tm=180;mx=W/2;my=H-90;pmx=mx;pmy=my}
   $('cdn').hidden=false;$('cdn').textContent=m.n||T('go');if(!m.n)setTimeout(()=>$('cdn').hidden=true,600);break;
  case 's':phase='play';if(!$('gm').classList.contains('on')){show('gm');fit()}snap(m);break;
  case 'goal':try{tg.HapticFeedback.impactOccurred('medium')}catch(e){}break;
@@ -97,9 +98,10 @@ const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
 function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q)),v=idx?[-m.v[0],-m.v[1]]:m.v;
  const d=Date.now()-m.ts;off=off===null||d<off?d:off+(d-off)*.02; // tracks min latency -> removes network jitter
  let t=m.ts+off;if(buf.length&&t<=buf[buf.length-1].t)t=buf[buf.length-1].t+1;
- const o=buf.length?ballT(Date.now()):null;
- buf.push({t,ts:m.ts,k,v,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();
- if(o){const n=ballT(Date.now()),dx=o[0]-n[0],dy=o[1]-n[1];if(Math.hypot(dx,dy)>60)bc=[0,0];else bc=[bc[0]+dx,bc[1]+dy]}
+ buf.push({t,ts:m.ts,k,v,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();pz=m.z;
+ const now=Date.now(),g=ext({k,v},Math.min(.3,Math.max(0,(now-t)/1000+L1/1000))); // where the server puck is "now"
+ if(!P||pz||Math.hypot(g[0]-P.x,g[1]-P.y)>90)P={x:g[0],y:g[1],vx:v[0],vy:v[1]};
+ else if(now-hitAt>300+2*L1){P.x+=(g[0]-P.x)*.12;P.y+=(g[1]-P.y)*.12;P.vx+=(v[0]-P.vx)*.12;P.vy+=(v[1]-P.vy)*.12} // gentle pull; skipped right after my own hit
  sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm} // (bc: smooths snapshot corrections, snaps on teleports like goal resets)
 const FEEL=1;
 let bc=[0,0],lf=Date.now();
@@ -109,6 +111,19 @@ function ext(z,e){let x=z.k[0],y=z.k[1],vx=z.v[0],vy=z.v[1];const n=Math.max(1,M
   if(Math.abs(x-W/2)>=GOAL/2){if(y<UR){y=UR;vy=Math.abs(vy)*.95}else if(y>H-UR){y=H-UR;vy=-Math.abs(vy)*.95}}}
  return [x,y]}
 const ballT=now=>{const z=buf[buf.length-1];return ext(z,Math.min(.1,Math.max(0,(now-z.t)/1000)))};
+function hitC(k,cx,cy,v){let dx=k.x-cx,dy=k.y-cy,d=Math.hypot(dx,dy);const R=PR+UR;if(d>=R)return 0;if(d<1e-6){dx=0;dy=1;d=1}
+ const nx=dx/d,ny=dy/d,c=z=>Math.max(-1300,Math.min(1300,z));k.x=cx+nx*R;k.y=cy+ny*R;
+ const rv=(k.vx-c(v[0]))*nx+(k.vy-c(v[1]))*ny;if(rv<0){k.vx-=1.78*rv*nx;k.vy-=1.78*rv*ny}
+ const sp=Math.hypot(k.vx,k.vy);if(sp>600){const q=600+400*(1-Math.exp(-(sp-600)/400));k.vx*=q/sp;k.vy*=q/sp}return rv<0} // same as server
+function predict(now,op){ // local puck: my paddle hits are shown instantly, server only nudges it
+ let dt=Math.min(.05,Math.max(0,(now-pt)/1000));pt=now;
+ if(dt>0&&!pz&&phase==='play'){mv=[mv[0]+((mx-pmx)/dt-mv[0])*.5,mv[1]+((my-pmy)/dt-mv[1])*.5];
+  const n=Math.max(1,Math.ceil(dt/.004)),h=dt/n;
+  for(let s=1;s<=n;s++){const q=s/n;P.x+=P.vx*h;P.y+=P.vy*h;const d=Math.exp(-.35*h);P.vx*=d;P.vy*=d;
+   if(hitC(P,pmx+(mx-pmx)*q,pmy+(my-pmy)*q,mv))hitAt=now;hitC(P,op[0],op[1],opv);
+   if(P.x<UR){P.x=UR;P.vx=Math.abs(P.vx)*.95}else if(P.x>W-UR){P.x=W-UR;P.vx=-Math.abs(P.vx)*.95}
+   if(Math.abs(P.x-W/2)>=GOAL/2){if(P.y<UR){P.y=UR;P.vy=Math.abs(P.vy)*.95}else if(P.y>H-UR){P.y=H-UR;P.vy=-Math.abs(P.vy)*.95}}}}
+ pmx=mx;pmy=my;return[P.x,P.y]}
 let mx=W/2,my=H-90,lastSend=0,moved=0;
 let lx=0,ly=0,drag=0;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
@@ -127,15 +142,17 @@ function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd'
   for(let i=buf.length-1;i>=0;i--)if(buf[i].t<=rt){a=buf[i];b=buf[i+1]||a;break}
   if(buf[0].t>rt)a=b=buf[0];const t=b.t>a.t?Math.min(1,(rt-a.t)/(b.t-a.t)):0;
   k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
- if(buf.length){k=ballT(now);k=[k[0]+bc[0],k[1]+bc[1]]; // puck + opponent drawn on the same (latest-server) timeline
-  if(buf.length>1){const z=buf[buf.length-1],y=buf[buf.length-2],sd=(z.ts-y.ts)/1000,e=Math.min(.1,Math.max(0,(now-z.t)/1000));
-   if(sd>.005){const c=v=>Math.max(-2500,Math.min(2500,v));op=[Math.min(W,Math.max(0,z.op[0]+c((z.op[0]-y.op[0])/sd)*e)),Math.min(H,Math.max(0,z.op[1]+c((z.op[1]-y.op[1])/sd)*e))]}}}
+ if(buf.length){const z=buf[buf.length-1],y=buf[Math.max(0,buf.length-4)],sd=(z.ts-y.ts)/1000,e=Math.min(.05,Math.max(0,(now-z.t)/1000));
+  const c=v=>Math.max(-2500,Math.min(2500,v));op=z.op;
+  if(sd>.03){opv=[c((z.op[0]-y.op[0])/sd),c((z.op[1]-y.op[1])/sd)];op=[z.op[0]+opv[0]*e,z.op[1]+opv[1]*e]}
+  k=P?predict(now,op):ballT(now)}
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
  ring(me[0]+(mx-me[0])*FEEL,me[1]+(my-me[1])*FEEL,'#18b6e8');
  if(phase==='play'&&buf.length&&now-buf[buf.length-1].t>1500){cx.fillStyle='rgba(43,51,80,.75)';cx.font='700 22px system-ui';cx.textAlign='center';cx.fillText(T('rc'),W/2,H/2+8)}
  if(moved&&phase==='play'&&now-lastSend>16){lastSend=now;moved=0;out({t:'m',x:Math.round(mx),y:Math.round(my)})}}
+setInterval(()=>{if(phase==='play'||phase==='cd')out({t:'p',c:Date.now()})},2000);
 setLang(lang);fit();requestAnimationFrame(frame);
 const sp=(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.start_param)||new URLSearchParams(location.search).get('m');
 if(sp&&/^[\w-]{4,24}$/.test(sp))join(sp);
