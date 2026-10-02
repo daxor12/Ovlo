@@ -4,7 +4,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit', LINK = E.APP_LINK || '', PORT = E.PORT || 3000;
-const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1200, BOTWAIT = 15000;
+const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1200, BOTWAIT = 15000, GRACE = 10000;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
 
@@ -19,10 +19,18 @@ function auth(init) {
     return JSON.parse(p.get('user'));
   } catch { return null; }
 }
-async function member(uid) {
+const mcache = new Map(); // uid -> expiry; only positive results are cached, so "Check Again" always re-asks Telegram
+setInterval(() => { const t = Date.now(); for (const [k, v] of mcache) if (v < t) mcache.delete(k); }, 6e4);
+async function member(uid) { // true / false / null (Telegram busy or unreachable)
   if (!TOKEN) return true;
-  const r = await api('getChatMember', { chat_id: CH, user_id: uid });
-  return !!(r.ok && ['creator', 'administrator', 'member'].includes(r.result.status));
+  if ((mcache.get(uid) || 0) > Date.now()) return true;
+  try {
+    const r = await api('getChatMember', { chat_id: CH, user_id: uid });
+    if (!r.ok && (r.error_code === 429 || r.error_code >= 500)) return null;
+    const ok = !!(r.ok && ['creator', 'administrator', 'member'].includes(r.result.status));
+    if (ok) mcache.set(uid, Date.now() + 6e5);
+    return ok;
+  } catch { return null; }
 }
 
 const mk = id => ({ id, pl: [null, null], ready: [0, 0], phase: 'wait', sc: [0, 0], t: TIME, pause: 0, k: 0, act: Date.now(), cd: 3, last: -1,
@@ -93,6 +101,7 @@ function bot(r, dt) {
   b.tx = b.x + dx; b.ty = b.y + dy;
 }
 function step(r) {
+  if (r.pl.some(p => p && p.gone)) return; // paused while a player reconnects
   if (r.phase === 'count') {
     const n = Math.ceil(r.cd -= DT);
     if (n !== r.last) { r.last = n; send(r, { t: 'count', n: Math.max(n, 0) }); }
@@ -126,7 +135,9 @@ wss.on('connection', ws => {
     if (m.t === 'join' && !r) {
       if (!m.q && !ID.test(m.id)) return;
       const u = auth(m.init); if (!u) return ws.send(err('auth'));
-      if (!await member(u.id)) return ws.send(err('member'));
+      const mm = await member(u.id);
+      if (mm === null) return ws.send(err('busy'));
+      if (!mm) return ws.send(err('member'));
       if (ws.readyState !== 1 || r) return;
       let room;
       if (m.q) { // quick match: join a waiting public room, else open one (a bot fills in after BOTWAIT)
@@ -155,6 +166,11 @@ wss.on('connection', ws => {
   });
   ws.on('close', () => {
     if (!r || !r.pl[i] || r.pl[i].ws !== ws) return;
+    if (r.phase === 'count' || r.phase === 'play') { // keep the seat for a few seconds so the player can reconnect
+      const room = r, k = i; room.pl[k].gone = Date.now();
+      setTimeout(() => { const p = room.pl[k]; if (p && p.ws === ws && rooms.get(room.id) === room) { room.pl[k] = null; send(room, { t: 'left' }); rooms.delete(room.id); } }, GRACE);
+      return;
+    }
     r.pl[i] = null; r.ready = [0, 0]; r.act = Date.now();
     if (['count', 'play', 'over'].includes(r.phase)) { send(r, { t: 'left' }); rooms.delete(r.id); }
     else if (r.pub && (r.bot || (!r.pl[0] && !r.pl[1]))) rooms.delete(r.id);
