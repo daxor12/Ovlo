@@ -94,8 +94,8 @@ function table(){const c=ox;c.setTransform(D*S,0,0,D*S,0,0);c.clearRect(0,0,W,H)
  wall('#9b7bff',[[gx,3],[3,3],[3,H/2]]);wall('#9b7bff',[[gy,3],[W-3,3],[W-3,H/2]]);
  wall('#22d3ee',[[3,H/2],[3,H-3],[gx,H-3]]);wall('#22d3ee',[[W-3,H/2],[W-3,H-3],[gy,H-3]]);c.shadowBlur=0}
 const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
-function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:performance.now(),k,v:idx?[-m.v[0],-m.v[1]]:m.v,me:p[idx],op:p[1-idx]});if(buf.length>24)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
-const FEEL=.75; // 0 = paddle drawn exactly where the server has it, 1 = exactly under the finger
+function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:performance.now(),k,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
+const FEEL=.5; // 0 = paddle drawn exactly where the server has it, 1 = exactly under the finger
 let mx=W/2,my=H-90,lastSend=0,moved=0;
 let lx=0,ly=0,drag=0;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
@@ -109,12 +109,11 @@ function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd'
  cx.textAlign='center';cx.fillStyle='rgba(120,130,210,.16)';cx.font='800 120px system-ui';
  cx.fillText(sc[1],W/2,H/2-60);cx.fillText(sc[0],W/2,H/2+160);
  cx.textAlign='right';cx.fillStyle='#8a93b8';cx.font='600 15px system-ui';cx.fillText(Math.floor(tm/60)+':'+String(tm%60).padStart(2,'0'),W-14,H/2-10);
- let z0=0,k=[W/2,H/2],op=[W/2,90],me=[W/2,H-90];
- if(buf.length){const rt=now-55;let a=buf[0],b=buf[0];
+ let k=[W/2,H/2],op=[W/2,90],me=[W/2,H-90];
+ if(buf.length){const rt=now-70;let a=buf[0],b=buf[0];
   for(let i=buf.length-1;i>=0;i--)if(buf[i].t<=rt){a=buf[i];b=buf[i+1]||a;break}
   if(buf[0].t>rt)a=b=buf[0];const t=b.t>a.t?Math.min(1,(rt-a.t)/(b.t-a.t)):0;
-  k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];if(a===b&&rt>a.t&&!z0){const d=Math.min(.1,(rt-a.t)/1000);k=[a.k[0]+a.v[0]*d,a.k[1]+a.v[1]*d]}
-  op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
+  k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
