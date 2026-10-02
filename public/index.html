@@ -29,7 +29,7 @@ h2{margin:0;font-size:22px;font-weight:700}
 #res{font-size:44px;font-weight:800;letter-spacing:.06em}#scr{font-size:30px;color:#6f7be8;margin-bottom:18px;direction:ltr}
 </style></head><body>
 <div id="hm" class="s on"><h1>OVLO</h1><div class="sub" data-i="sub"></div>
-<button class="b" id="bot" data-i="bot"></button><button class="b g" id="inv" data-i="inv"></button><div class="note" data-i="pn"></div>
+<button class="b" id="bot" data-i="bot"></button><button class="b g" id="two" data-i="two"></button><button class="b g" id="inv" data-i="inv"></button><div class="note" data-i="pn"></div>
 <div class="lang"><span data-l="fa">فارسی</span>|<span data-l="en">English</span></div></div>
 <div id="jn" class="s"><h2 data-i="jt"></h2><button class="b" id="jc" data-i="jc"></button><button class="b g" id="ck" data-i="ck"></button><div class="hint" id="jh"></div></div>
 <div id="df" class="s"><h2 data-i="dt"></h2><button class="b" data-d="0" data-i="d0"></button><button class="b" data-d="1" data-i="d1"></button><button class="b" data-d="2" data-i="d2"></button><button class="b g" data-x data-i="bk"></button></div>
@@ -40,8 +40,8 @@ h2{margin:0;font-size:22px;font-weight:700}
 <script>
 const tg=window.Telegram&&Telegram.WebApp;try{tg.ready();tg.expand();tg.disableVerticalSwipes()}catch(e){}
 const W=400,H=700,PR=34,UR=19,GOAL=150,CRN=80,$=i=>document.getElementById(i);
-const L={en:{sub:'AIR HOCKEY',pn:'Playing with a friend depends on your ping, region and network quality, so some lag is possible.',bot:'Play vs Bot',dt:'Choose difficulty',d0:'Easy',d1:'Normal',d2:'Hard',bk:'Back',inv:'Invite Friend',wait:'Waiting for opponent...',joined:'Opponent connected ✓',conn:'Connecting...',find:'Finding an opponent...',busy:'Server is busy, please try again',tg:'Please open OVLO from inside Telegram',rc:'Reconnecting...',hint:'Send the invite — your friend should join within a minute',ready:'PLAY',wr:'Waiting...',jt:'Join our channel to play',jc:'Join Channel',ck:'Check Again',nj:"You haven't joined yet",dcm:'Opponent disconnected',full:'This match is full',win:'YOU WIN',lose:'YOU LOSE',re:'Rematch',ex:'Exit',go:'GO'},
-fa:{sub:'ایر هاکی',pn:'بازی با دوست به پینگ، منطقه و کیفیت اینترنت بستگی دارد و ممکن است کمی لگ داشته باشد.',bot:'بازی با ربات',dt:'سطح بازی را انتخاب کنید',d0:'آسان',d1:'معمولی',d2:'سخت',bk:'بازگشت',inv:'دعوت دوست',wait:'در انتظار حریف...',joined:'حریف متصل شد ✓',conn:'در حال اتصال...',find:'در حال پیدا کردن حریف...',busy:'سرور شلوغ است، دوباره امتحان کنید',tg:'لطفاً بازی را از داخل تلگرام باز کنید',rc:'در حال اتصال مجدد...',hint:'دعوت را بفرست؛ دوستت تا حدود یک دقیقه‌ی دیگر می‌رسد',ready:'شروع',wr:'منتظر...',jt:'برای بازی، عضو کانال شوید',jc:'عضویت در کانال',ck:'بررسی دوباره',nj:'هنوز عضو نشده‌اید',dcm:'حریف از بازی خارج شد',full:'این بازی پر است',win:'بردی!',lose:'باختی',re:'بازی مجدد',ex:'خروج',go:'برو'}};
+const L={en:{sub:'AIR HOCKEY',pn:'Playing with a friend depends on your ping, region and network quality, so some lag is possible.',bot:'Play vs Bot',two:'2 Players · 1 Phone',p1w:'Bottom wins',p2w:'Top wins',dt:'Choose difficulty',d0:'Easy',d1:'Normal',d2:'Hard',bk:'Back',inv:'Invite Friend',wait:'Waiting for opponent...',joined:'Opponent connected ✓',conn:'Connecting...',find:'Finding an opponent...',busy:'Server is busy, please try again',tg:'Please open OVLO from inside Telegram',rc:'Reconnecting...',hint:'Send the invite — your friend should join within a minute',ready:'PLAY',wr:'Waiting...',jt:'Join our channel to play',jc:'Join Channel',ck:'Check Again',nj:"You haven't joined yet",dcm:'Opponent disconnected',full:'This match is full',win:'YOU WIN',lose:'YOU LOSE',re:'Rematch',ex:'Exit',go:'GO'},
+fa:{sub:'ایر هاکی',pn:'بازی با دوست به پینگ، منطقه و کیفیت اینترنت بستگی دارد و ممکن است کمی لگ داشته باشد.',bot:'بازی با ربات',two:'دو نفره · یک گوشی',p1w:'بازیکن پایین برد',p2w:'بازیکن بالا برد',dt:'سطح بازی را انتخاب کنید',d0:'آسان',d1:'معمولی',d2:'سخت',bk:'بازگشت',inv:'دعوت دوست',wait:'در انتظار حریف...',joined:'حریف متصل شد ✓',conn:'در حال اتصال...',find:'در حال پیدا کردن حریف...',busy:'سرور شلوغ است، دوباره امتحان کنید',tg:'لطفاً بازی را از داخل تلگرام باز کنید',rc:'در حال اتصال مجدد...',hint:'دعوت را بفرست؛ دوستت تا حدود یک دقیقه‌ی دیگر می‌رسد',ready:'شروع',wr:'منتظر...',jt:'برای بازی، عضو کانال شوید',jc:'عضویت در کانال',ck:'بررسی دوباره',nj:'هنوز عضو نشده‌اید',dcm:'حریف از بازی خارج شد',full:'این بازی پر است',win:'بردی!',lose:'باختی',re:'بازی مجدد',ex:'خروج',go:'برو'}};
 let lang='en';try{lang=localStorage.ovlo||'en'}catch(e){}
 const T=k=>L[lang][k];
 function setLang(l){lang=l;try{localStorage.ovlo=l}catch(e){}document.documentElement.dir=l==='fa'?'rtl':'ltr';
@@ -76,7 +76,7 @@ function on(m){switch(m.t){
  case 'left':phase='left';$('dm').textContent=T('dcm');show('dc')}}
 $('inv').onclick=()=>{pend=1;join(rid())};$('inv2').onclick=invite;
 $('rdy').onclick=()=>{out({t:'ready'})};
-$('re').onclick=()=>{if(!lg)return out({t:'ready'});const di=lg.di,hu=lg.hum;if(hu){$('re').disabled=true;setTimeout(()=>lgStart(di,1),900+Math.random()*1800)}else lgStart(di)};
+$('re').onclick=()=>{if(!lg)return out({t:'ready'});if(lg.two)return lgStart(0,0,1);const di=lg.di,hu=lg.hum;if(hu){$('re').disabled=true;setTimeout(()=>lgStart(di,1),900+Math.random()*1800)}else lgStart(di)};
 $('jc').onclick=()=>{const u='https://t.me/Daxor_unit';tg?tg.openTelegramLink(u):open(u)};
 $('ck').onclick=()=>{$('jh').textContent='';join(id,qm);setTimeout(()=>{if($('jn').classList.contains('on'))$('jh').textContent=T('nj')},900)};
 document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{if(ws){const s=ws;ws=null;s.close()}clearTimeout(qt);lg=null;bf=0;phase='home';show('hm')});
@@ -102,9 +102,19 @@ function snap(m){const nw=performance.now();if(lsn)gap+=(Math.min(200,nw-lsn)-ga
 const FEEL=.75; // 0 = paddle drawn exactly where the server has it, 1 = exactly under the finger
 let mx=W/2,my=H-90,lastSend=0,moved=0;
 let lx=0,ly=0,drag=0;
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
-cv.addEventListener('pointermove',e=>{if(!drag)return;mx=Math.min(W-PR,Math.max(PR,mx+(e.clientX-lx)/S));my=Math.min(H-PR,Math.max(H/2+PR,my+(e.clientY-ly)/S));lx=e.clientX;ly=e.clientY;moved=1});
-const up=()=>{drag=0};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+const ptr=new Map(),p2=()=>lg&&lg.two&&phase==='local';
+let p2x=W/2,p2y=90;
+cv.addEventListener('pointerdown',e=>{
+ if(p2()){const r=cv.getBoundingClientRect(),o=(e.clientY-r.top)/S<H/2?1:0;
+  for(const v of ptr.values())if(v.o===o)return;
+  cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{o,lx:e.clientX,ly:e.clientY});return}
+ cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
+cv.addEventListener('pointermove',e=>{
+ if(p2()){const v=ptr.get(e.pointerId);if(!v)return;const dx=(e.clientX-v.lx)/S,dy=(e.clientY-v.ly)/S;v.lx=e.clientX;v.ly=e.clientY;
+  if(v.o){p2x=Math.min(W-PR,Math.max(PR,p2x+dx));p2y=Math.min(H/2-PR,Math.max(PR,p2y+dy))}
+  else{mx=Math.min(W-PR,Math.max(PR,mx+dx));my=Math.min(H-PR,Math.max(H/2+PR,my+dy))}return}
+ if(!drag)return;mx=Math.min(W-PR,Math.max(PR,mx+(e.clientX-lx)/S));my=Math.min(H-PR,Math.max(H/2+PR,my+(e.clientY-ly)/S));lx=e.clientX;ly=e.clientY;moved=1});
+const up=e=>{ptr.delete(e.pointerId);drag=0};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 function ring(x,y,col){cx.globalAlpha=.16;cx.fillStyle=col;cx.beginPath();cx.arc(x,y,PR+8,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle=col;cx.lineWidth=6;cx.beginPath();cx.arc(x,y,PR-3,0,7);cx.fill();cx.stroke();
  cx.fillStyle=col;cx.beginPath();cx.arc(x,y,13,0,7);cx.fill()}
@@ -130,7 +140,7 @@ const DF=[{rt:4,er:50,sp:480,pr:0,am:0,df:.3},{rt:8,er:25,sp:850,pr:.5,am:.3,df:
 const LV=1600,LP=3200,LDT=1/120,cl=(v,a)=>Math.max(-a,Math.min(a,v));
 let lg=null;
 const rf=x=>{const lo=UR,w=W-2*UR,u=(((x-lo)%(2*w))+2*w)%(2*w);return lo+(u>w?2*w-u:u)};
-function lgStart(di,hum){bf=0;lg={di,hum:hum?1:0,skill:1,clock:0,nap:0,tf:null,d:DF[di],pk:{x:W/2,y:H/2+(Math.random()<.5?110:-110),vx:0,vy:0},me:{x:W/2,y:H-90,x0:W/2,y0:H-90,vx:0,vy:0},bt:{x:W/2,y:90,x0:W/2,y0:90,vx:0,vy:0},sc:[0,0],t:180,cd:3,go:0,pause:0,acc:0,last:0,B:null,at:0,ox:0,aimx:W/2};
+function lgStart(di,hum,two){bf=0;ptr.clear();p2x=W/2;p2y=90;lg={di,two:two?1:0,hum:hum?1:0,skill:1,clock:0,nap:0,tf:null,d:DF[di],pk:{x:W/2,y:H/2+(Math.random()<.5?110:-110),vx:0,vy:0},me:{x:W/2,y:H-90,x0:W/2,y0:H-90,vx:0,vy:0},bt:{x:W/2,y:90,x0:W/2,y0:90,vx:0,vy:0},sc:[0,0],t:180,cd:3,go:0,pause:0,acc:0,last:0,B:null,at:0,ox:0,aimx:W/2};
  mx=W/2;my=H-90;phase='local';show('gm');fit()}
 function lgHit(k,x,y,r,vx,vy,e){let dx=k.x-x,dy=k.y-y,d=Math.hypot(dx,dy);if(d>=r)return;if(d<1e-6){dx=0;dy=1;d=1}
  const nx=dx/d,ny=dy/d;k.x=x+nx*r;k.y=y+ny*r;const rv=(k.vx-vx)*nx+(k.vy-vy)*ny;
@@ -167,11 +177,12 @@ function lgBot(g,dt){const d=g.d,b=g.bt,k=g.pk,hm=g.hum,sk=hm?g.skill:1,a=1-Math
  }
  if(hm){const t=g.tf||(g.tf={x:b.x,y:b.y}),r=1-Math.exp(-16*dt);t.x+=(tx-t.x)*r;t.y+=(ty-t.y)*r;tx=t.x;ty=t.y}
  lgPad(b,tx,ty,PR,H/2-PR,dt,d.sp*sk)}
-function lgEnd(g){g.over=1;phase='over';$('cdn').hidden=true;$('res').textContent=T(g.sc[0]>g.sc[1]?'win':'lose');$('scr').textContent=g.sc[0]+' — '+g.sc[1];$('re').disabled=false;show('ov')}
+function lgEnd(g){g.over=1;phase='over';$('cdn').hidden=true;$('res').textContent=T(g.two?(g.sc[0]>g.sc[1]?'p1w':'p2w'):(g.sc[0]>g.sc[1]?'win':'lose'));$('scr').textContent=g.two?Math.max(g.sc[0],g.sc[1])+' — '+Math.min(g.sc[0],g.sc[1]):g.sc[0]+' — '+g.sc[1];$('re').disabled=false;show('ov')}
 function lgTick(g){const dt=LDT;if(g.over)return;
  lgPad(g.me,mx,my,H/2+PR,H-PR,dt,LP);
- if(g.cd>0){g.cd-=dt;if(g.cd<=0)g.go=.6;lgPad(g.bt,W/2,90,PR,H/2-PR,dt,1000);return}
- if(g.nap>0){g.nap-=dt;lgPad(g.bt,g.bt.x,g.bt.y,PR,H/2-PR,dt,1000)}else lgBot(g,dt);
+ if(g.cd>0){g.cd-=dt;if(g.cd<=0)g.go=.6;if(g.two)lgPad(g.bt,p2x,p2y,PR,H/2-PR,dt,LP);else lgPad(g.bt,W/2,90,PR,H/2-PR,dt,1000);return}
+ if(g.two)lgPad(g.bt,p2x,p2y,PR,H/2-PR,dt,LP);
+ else if(g.nap>0){g.nap-=dt;lgPad(g.bt,g.bt.x,g.bt.y,PR,H/2-PR,dt,1000)}else lgBot(g,dt);
  if(g.pause>0){g.pause-=dt;return}
  g.t=Math.max(0,g.t-dt);
  const r=lgPuck(g,dt);
@@ -187,14 +198,16 @@ function localFrame(now){const g=lg;if(!g)return;
  if(g.over)return;
  const c=$('cdn');if(g.cd>0){c.hidden=false;c.textContent=Math.ceil(g.cd)}else if(g.go>0){g.go-=dt;c.hidden=false;c.textContent=T('go')}else c.hidden=true;
  cx.setTransform(1,0,0,1,0,0);cx.drawImage(oc,0,0);cx.setTransform(D*S,0,0,D*S,0,0);
- cx.textAlign='center';cx.fillStyle='rgba(120,130,210,.16)';cx.font='800 120px system-ui';cx.fillText(g.sc[1],W/2,H/2-60);cx.fillText(g.sc[0],W/2,H/2+160);
+ cx.textAlign='center';cx.fillStyle='rgba(120,130,210,.16)';cx.font='800 120px system-ui';if(g.two){cx.save();cx.translate(W/2,H/2-60);cx.rotate(Math.PI);cx.fillText(g.sc[1],0,0);cx.restore()}else cx.fillText(g.sc[1],W/2,H/2-60);cx.fillText(g.sc[0],W/2,H/2+160);
  const tm=Math.ceil(g.t);cx.textAlign='right';cx.fillStyle='#8a93b8';cx.font='600 15px system-ui';cx.fillText(Math.floor(tm/60)+':'+String(tm%60).padStart(2,'0'),W-14,H/2-10);
+ if(g.two){cx.save();cx.translate(14,H/2+10);cx.rotate(Math.PI);cx.fillText(Math.floor(tm/60)+':'+String(tm%60).padStart(2,'0'),0,0);cx.restore()}
  ring(g.bt.x,g.bt.y,'#8b6cff');const k=g.pk;
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k.x,k.y,UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k.x,k.y,UR-1,0,7);cx.fill();cx.stroke();
  ring(g.me.x,g.me.y,'#18b6e8')}
 document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>lgStart(+b.dataset.d));
 $('bot').onclick=()=>show('df');
+$('two').onclick=()=>lgStart(0,0,1);
 
 setLang(lang);fit();requestAnimationFrame(frame);
 const sp=(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.start_param)||new URLSearchParams(location.search).get('m');
