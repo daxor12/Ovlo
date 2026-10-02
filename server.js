@@ -4,7 +4,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit', LINK = E.APP_LINK || '', PORT = E.PORT || 3000;
-const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1200, BOTWAIT = 15000, GRACE = 10000;
+const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 3200, VMAX = 1200, BOTWAIT = 15000, GRACE = 10000;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
 
@@ -60,7 +60,7 @@ function movePads(r, dt) {
     let dx = (tx - p.x) * a, dy = (ty - p.y) * a; const d = Math.hypot(dx, dy), m = PMAX * dt;
     if (d > m) { dx *= m / d; dy *= m / d; }
     p.x += dx; p.y += dy;
-    p.vx += (dx / dt - p.vx) * .15; p.vy += (dy / dt - p.vy) * .15;
+    p.vx += (dx / dt - p.vx) * .6; p.vy += (dy / dt - p.vy) * .6;
   });
 }
 const cv = v => Math.max(-1400, Math.min(1400, v)); // paddle speed used in collisions
@@ -118,10 +118,19 @@ function step(r) {
     if (r.pause > 0) r.pause -= DT;
     else { puck(r, DT); r.t = Math.max(0, r.t - DT); if (r.t <= 0 && r.phase === 'play' && r.sc[0] !== r.sc[1]) end(r); }
   }
-  if (++r.k % 2 === 0 && (r.phase === 'play' || r.phase === 'count'))
-    send(r, { t: 's', k: [rd(r.pk.x), rd(r.pk.y)], v: [rd(r.pk.vx), rd(r.pk.vy)], z: r.pause > 0 ? 1 : 0, p: r.pd.map(p => [rd(p.x), rd(p.y)]), sc: r.sc, tm: Math.ceil(r.t) });
+  r.k++;
+  if (r.phase === 'play' || r.phase === 'count')
+    send(r, { t: 's', ts: Date.now(), k: [rd(r.pk.x), rd(r.pk.y)], v: [rd(r.pk.vx), rd(r.pk.vy)], z: r.pause > 0 ? 1 : 0, p: r.pd.map(p => [rd(p.x), rd(p.y)]), sc: r.sc, tm: Math.ceil(r.t) });
 }
-setInterval(() => { for (const r of rooms.values()) if (r.phase === 'count' || r.phase === 'play') step(r); }, 1000 / 60);
+// fixed-timestep loop with accumulator: setInterval jitter no longer slows the game down
+let lastT = Date.now(), acc = 0;
+setInterval(() => {
+  const n = Date.now(); acc += Math.min(n - lastT, 100); lastT = n;
+  while (acc >= 1000 / 60) {
+    acc -= 1000 / 60;
+    for (const r of rooms.values()) if (r.phase === 'count' || r.phase === 'play') step(r);
+  }
+}, 4);
 setInterval(() => { for (const [k, r] of rooms) if (Date.now() - r.act > 18e5 || (!r.pl[0] && !r.pl[1] && Date.now() - r.act > 6e4)) rooms.delete(k); }, 6e4);
 
 setInterval(() => {
@@ -134,6 +143,7 @@ const err = c => JSON.stringify({ t: 'err', c });
 const srv = http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html;charset=utf-8' }); s.end(fs.readFileSync(path.join(__dirname, 'public/index.html'))); });
 const wss = new WebSocketServer({ server: srv, path: '/ws', maxPayload: 1024 });
 wss.on('connection', ws => {
+  try { ws._socket.setNoDelay(true); } catch { } // disable Nagle: lower latency
   let r = null, i = -1;
   ws.on('message', async raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
