@@ -56,7 +56,7 @@ function movePads(r, dt) {
     const y0 = i ? PR : H / 2 + PR, y1 = i ? H / 2 - PR : H - PR;
     const tx = Math.min(W - PR, Math.max(PR, p.tx)), ty = Math.min(y1, Math.max(y0, p.ty));
     p.x0 = p.x; p.y0 = p.y;
-    const a = 1 - Math.exp(-28 * dt);
+    const a = 1 - Math.exp(-40 * dt);
     let dx = (tx - p.x) * a, dy = (ty - p.y) * a; const d = Math.hypot(dx, dy), m = PMAX * dt;
     if (d > m) { dx *= m / d; dy *= m / d; }
     p.x += dx; p.y += dy;
@@ -96,7 +96,7 @@ function bot(r, dt) {
     if (s * (py - b.y) > 6) { tx = px; ty = py + s * 30; }                     // behind puck: drive through it
     else { tx = px + (b.x >= px ? 70 : -70); ty = py - s * 60; }               // go around to get behind it
   } else { tx = W / 2 + (px - W / 2) * .35; ty = i ? 95 : H - 95; }            // defend
-  let dx = tx - b.x, dy = ty - b.y; const d = Math.hypot(dx, dy), m = 1000 * dt / (1 - Math.exp(-28 * dt)); // ~1000 u/s max
+  let dx = tx - b.x, dy = ty - b.y; const d = Math.hypot(dx, dy), m = 1000 * dt / (1 - Math.exp(-40 * dt)); // ~1000 u/s max
   if (d > m) { dx *= m / d; dy *= m / d; }
   b.tx = b.x + dx; b.ty = b.y + dy;
 }
