@@ -4,7 +4,7 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit', LINK = E.APP_LINK || '', PORT = E.PORT || 3000;
-const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1200;
+const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, WIN = 7, TIME = 180, DT = 1 / 60, PMAX = 2200, VMAX = 1200, BOTWAIT = 15000;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
 
@@ -28,11 +28,11 @@ async function member(uid) {
 const mk = id => ({ id, pl: [null, null], ready: [0, 0], phase: 'wait', sc: [0, 0], t: TIME, pause: 0, k: 0, act: Date.now(), cd: 3, last: -1,
   pk: { x: W / 2, y: H / 2, vx: 0, vy: 0 }, pd: [{ x: W / 2, y: H - 90, vx: 0, vy: 0, tx: W / 2, ty: H - 90 }, { x: W / 2, y: 90, vx: 0, vy: 0, tx: W / 2, ty: 90 }] });
 const send = (r, o, i) => { const s = JSON.stringify(o); r.pl.forEach((p, k) => p && (i === undefined || i === k) && p.ws.readyState === 1 && p.ws.send(s)); };
-const info = r => r.pl.forEach((p, i) => p && send(r, { t: 'room', idx: i, p: r.phase, n: r.pl.filter(Boolean).length, ready: r.ready }, i));
+const info = r => r.pl.forEach((p, i) => p && send(r, { t: 'room', idx: i, p: r.phase, n: r.pl.filter(Boolean).length, ready: r.ready, id: r.id }, i));
 const rd = v => Math.round(v * 10) / 10;
 
 function start(r) {
-  r.phase = 'count'; r.cd = 3; r.last = -1; r.sc = [0, 0]; r.t = TIME; r.pause = 0; r.ready = [0, 0];
+  r.bk = null; r.phase = 'count'; r.cd = 3; r.last = -1; r.sc = [0, 0]; r.t = TIME; r.pause = 0; r.ready = [0, 0];
   r.pk = { x: W / 2, y: H / 2 + (Math.random() < .5 ? 110 : -110), vx: 0, vy: 0 };
   r.pd[0].x = r.pd[0].tx = W / 2; r.pd[0].y = r.pd[0].ty = H - 90;
   r.pd[1].x = r.pd[1].tx = W / 2; r.pd[1].y = r.pd[1].ty = 90;
@@ -77,12 +77,28 @@ function puck(r, dt) {
   }
   if (k.y < -UR) goal(r, 0); else if (k.y > H + UR) goal(r, 1);
 }
+function bot(r, dt) {
+  const i = r.bi, b = r.pd[i], k = r.pk, s = i ? 1 : -1; // s=+1: bot defends y=0, attacks toward +y
+  const B = r.bk || (r.bk = { x: k.x, y: k.y, ox: 0, t: 0 });
+  const a = 1 - Math.exp(-6 * dt); B.x += (k.x - B.x) * a; B.y += (k.y - B.y) * a; // ~160ms reaction
+  if ((B.t -= dt) <= 0) { B.t = .4; B.ox = (Math.random() - .5) * 28; }      // small aiming error
+  const px = B.x + B.ox, py = B.y, mine = i ? py < H / 2 : py > H / 2;
+  let tx, ty;
+  if (mine) {
+    if (s * (py - b.y) > 6) { tx = px; ty = py + s * 30; }                     // behind puck: drive through it
+    else { tx = px + (b.x >= px ? 70 : -70); ty = py - s * 60; }               // go around to get behind it
+  } else { tx = W / 2 + (px - W / 2) * .35; ty = i ? 95 : H - 95; }            // defend
+  let dx = tx - b.x, dy = ty - b.y; const d = Math.hypot(dx, dy), m = 1000 * dt / (1 - Math.exp(-28 * dt)); // ~1000 u/s max
+  if (d > m) { dx *= m / d; dy *= m / d; }
+  b.tx = b.x + dx; b.ty = b.y + dy;
+}
 function step(r) {
   if (r.phase === 'count') {
     const n = Math.ceil(r.cd -= DT);
     if (n !== r.last) { r.last = n; send(r, { t: 'count', n: Math.max(n, 0) }); }
     if (r.cd <= 0) r.phase = 'play';
   }
+  if (r.bot && r.phase === 'play') bot(r, DT);
   movePads(r, DT);
   if (r.phase === 'play') {
     if (r.pause > 0) r.pause -= DT;
@@ -94,6 +110,12 @@ function step(r) {
 setInterval(() => { for (const r of rooms.values()) if (r.phase === 'count' || r.phase === 'play') step(r); }, 1000 / 60);
 setInterval(() => { for (const [k, r] of rooms) if (Date.now() - r.act > 18e5 || (!r.pl[0] && !r.pl[1] && Date.now() - r.act > 6e4)) rooms.delete(k); }, 6e4);
 
+setInterval(() => {
+  const t = Date.now();
+  for (const r of rooms.values()) if (r.pub && r.phase === 'wait' && !r.bot && r.botAt <= t && r.pl.filter(Boolean).length === 1) {
+    r.bi = r.pl[0] ? 1 : 0; r.bot = 1; r.pl[r.bi] = { uid: 'bot', ws: { readyState: 3, send() { }, close() { } } }; r.ready[r.bi] = 1; info(r);
+  }
+}, 500);
 const err = c => JSON.stringify({ t: 'err', c });
 const srv = http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html;charset=utf-8' }); s.end(fs.readFileSync(path.join(__dirname, 'public/index.html'))); });
 const wss = new WebSocketServer({ server: srv, path: '/ws', maxPayload: 1024 });
@@ -102,12 +124,18 @@ wss.on('connection', ws => {
   ws.on('message', async raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.t === 'join' && !r) {
-      if (!ID.test(m.id)) return;
+      if (!m.q && !ID.test(m.id)) return;
       const u = auth(m.init); if (!u) return ws.send(err('auth'));
       if (!await member(u.id)) return ws.send(err('member'));
       if (ws.readyState !== 1 || r) return;
-      if (!rooms.has(m.id)) { if (rooms.size > 5000) return; rooms.set(m.id, mk(m.id)); }
-      const room = rooms.get(m.id);
+      let room;
+      if (m.q) { // quick match: join a waiting public room, else open one (a bot fills in after BOTWAIT)
+        room = [...rooms.values()].find(x => x.pub && x.phase === 'wait' && !x.bot && x.pl.filter(Boolean).length === 1 && x.pl.find(Boolean).uid !== u.id);
+        if (!room) { if (rooms.size > 5000) return; room = mk(crypto.randomBytes(5).toString('hex')); room.pub = 1; room.botAt = Date.now() + BOTWAIT; rooms.set(room.id, room); }
+      } else {
+        if (!rooms.has(m.id)) { if (rooms.size > 5000) return; rooms.set(m.id, mk(m.id)); }
+        room = rooms.get(m.id);
+      }
       let j = room.pl.findIndex(p => p && p.uid === u.id); if (j < 0) j = room.pl.findIndex(p => !p);
       if (j < 0) return ws.send(err('full'));
       if (room.pl[j]) try { room.pl[j].ws.close(); } catch { }
@@ -117,7 +145,7 @@ wss.on('connection', ws => {
       if (!(Number.isFinite(m.x) && Number.isFinite(m.y))) return;
       const p = r.pd[i]; p.tx = i ? W - m.x : m.x; p.ty = i ? H - m.y : m.y;
     } else if (m.t === 'ready' && (r.phase === 'wait' || r.phase === 'over') && r.pl[0] && r.pl[1]) {
-      r.ready[i] = 1; r.act = Date.now();
+      r.ready[i] = 1; if (r.bot) r.ready[r.bi] = 1; r.act = Date.now();
       if (r.ready[0] && r.ready[1]) start(r); else info(r);
     }
   });
@@ -125,7 +153,8 @@ wss.on('connection', ws => {
     if (!r || !r.pl[i] || r.pl[i].ws !== ws) return;
     r.pl[i] = null; r.ready = [0, 0]; r.act = Date.now();
     if (['count', 'play', 'over'].includes(r.phase)) { send(r, { t: 'left' }); rooms.delete(r.id); }
-    else { r.phase = 'wait'; info(r); }
+    else if (r.pub && (r.bot || (!r.pl[0] && !r.pl[1]))) rooms.delete(r.id);
+    else { r.phase = 'wait'; if (r.pub) r.botAt = Date.now() + BOTWAIT; info(r); }
   });
 });
 srv.listen(PORT, () => console.log('OVLO on :' + PORT));
