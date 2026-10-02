@@ -116,7 +116,7 @@ function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd'
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
- ring(mx,my,'#18b6e8');
+ ring(me[0],me[1],'#18b6e8');
  if(phase==='play'&&buf.length&&now-buf[buf.length-1].t>1500){cx.fillStyle='rgba(43,51,80,.75)';cx.font='700 22px system-ui';cx.textAlign='center';cx.fillText(T('rc'),W/2,H/2+8)}
  if(moved&&phase==='play'&&now-lastSend>16){lastSend=now;moved=0;out({t:'m',x:Math.round(mx),y:Math.round(my)})}}
 setLang(lang);fit();requestAnimationFrame(frame);
