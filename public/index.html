@@ -66,7 +66,7 @@ function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh
 function on(m){switch(m.t){
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T({full:'full',busy:'busy',auth:'tg'}[m.c]||'dcm');show('dc')}break;
  case 'room':rc=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
- case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];sc=[0,0];tm=180;mx=W/2;my=H-90}
+ case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];bc=[0,0];sc=[0,0];tm=180;mx=W/2;my=H-90}
   $('cdn').hidden=false;$('cdn').textContent=m.n||T('go');if(!m.n)setTimeout(()=>$('cdn').hidden=true,600);break;
  case 's':phase='play';if(!$('gm').classList.contains('on')){show('gm');fit()}snap(m);break;
  case 'goal':try{tg.HapticFeedback.impactOccurred('medium')}catch(e){}break;
@@ -97,8 +97,18 @@ const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
 function snap(m){const k=fl(...m.k),p=m.p.map(q=>fl(...q)),v=idx?[-m.v[0],-m.v[1]]:m.v;
  const d=Date.now()-m.ts;off=off===null||d<off?d:off+(d-off)*.02; // tracks min latency -> removes network jitter
  let t=m.ts+off;if(buf.length&&t<=buf[buf.length-1].t)t=buf[buf.length-1].t+1;
- buf.push({t,k,v,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
-const FEEL=1; // 0 = paddle drawn exactly where the server has it, 1 = exactly under the finger
+ const o=buf.length?ballT(Date.now()):null;
+ buf.push({t,ts:m.ts,k,v,me:p[idx],op:p[1-idx]});if(buf.length>12)buf.shift();
+ if(o){const n=ballT(Date.now()),dx=o[0]-n[0],dy=o[1]-n[1];if(Math.hypot(dx,dy)>60)bc=[0,0];else bc=[bc[0]+dx,bc[1]+dy]}
+ sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm} // (bc: smooths snapshot corrections, snaps on teleports like goal resets)
+const FEEL=1;
+let bc=[0,0],lf=Date.now();
+function ext(z,e){let x=z.k[0],y=z.k[1],vx=z.v[0],vy=z.v[1];const n=Math.max(1,Math.ceil(e/.008)),h=e/n; // same physics as the server: friction + wall bounces
+ for(let s=0;s<n;s++){x+=vx*h;y+=vy*h;const d=Math.exp(-.35*h);vx*=d;vy*=d;
+  if(x<UR){x=UR;vx=Math.abs(vx)*.95}else if(x>W-UR){x=W-UR;vx=-Math.abs(vx)*.95}
+  if(Math.abs(x-W/2)>=GOAL/2){if(y<UR){y=UR;vy=Math.abs(vy)*.95}else if(y>H-UR){y=H-UR;vy=-Math.abs(vy)*.95}}}
+ return [x,y]}
+const ballT=now=>{const z=buf[buf.length-1];return ext(z,Math.min(.1,Math.max(0,(now-z.t)/1000)))};
 let mx=W/2,my=H-90,lastSend=0,moved=0;
 let lx=0,ly=0,drag=0;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);drag=1;lx=e.clientX;ly=e.clientY});
@@ -107,7 +117,7 @@ const up=()=>{drag=0};cv.addEventListener('pointerup',up);cv.addEventListener('p
 function ring(x,y,col){cx.globalAlpha=.16;cx.fillStyle=col;cx.beginPath();cx.arc(x,y,PR+8,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle=col;cx.lineWidth=6;cx.beginPath();cx.arc(x,y,PR-3,0,7);cx.fill();cx.stroke();
  cx.fillStyle=col;cx.beginPath();cx.arc(x,y,13,0,7);cx.fill()}
-function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd')return;now=Date.now();
+function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd')return;now=Date.now();{const dd=Math.exp(-Math.min(.1,(now-lf)/1000)/.06);lf=now;bc=[bc[0]*dd,bc[1]*dd]}
  cx.setTransform(1,0,0,1,0,0);cx.drawImage(oc,0,0);cx.setTransform(D*S,0,0,D*S,0,0);
  cx.textAlign='center';cx.fillStyle='rgba(120,130,210,.16)';cx.font='800 120px system-ui';
  cx.fillText(sc[1],W/2,H/2-60);cx.fillText(sc[0],W/2,H/2+160);
@@ -117,8 +127,9 @@ function frame(now){requestAnimationFrame(frame);if(phase!=='play'&&phase!=='cd'
   for(let i=buf.length-1;i>=0;i--)if(buf[i].t<=rt){a=buf[i];b=buf[i+1]||a;break}
   if(buf[0].t>rt)a=b=buf[0];const t=b.t>a.t?Math.min(1,(rt-a.t)/(b.t-a.t)):0;
   k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
- if(buf.length){const z=buf[buf.length-1],e=Math.min(.12,Math.max(0,(now-z.t)/1000)); // puck: extrapolate to 'now' so it matches the paddle under the finger
-  k=[Math.min(W-UR,Math.max(UR,z.k[0]+z.v[0]*e)),Math.min(H+UR,Math.max(-UR,z.k[1]+z.v[1]*e))]}
+ if(buf.length){k=ballT(now);k=[k[0]+bc[0],k[1]+bc[1]]; // puck + opponent drawn on the same (latest-server) timeline
+  if(buf.length>1){const z=buf[buf.length-1],y=buf[buf.length-2],sd=(z.ts-y.ts)/1000,e=Math.min(.1,Math.max(0,(now-z.t)/1000));
+   if(sd>.005){const c=v=>Math.max(-2500,Math.min(2500,v));op=[Math.min(W,Math.max(0,z.op[0]+c((z.op[0]-y.op[0])/sd)*e)),Math.min(H,Math.max(0,z.op[1]+c((z.op[1]-y.op[1])/sd)*e))]}}}
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
