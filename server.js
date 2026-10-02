@@ -118,10 +118,14 @@ function step(r) {
     if (r.pause > 0) r.pause -= DT;
     else { puck(r, DT); r.t = Math.max(0, r.t - DT); if (r.t <= 0 && r.phase === 'play' && r.sc[0] !== r.sc[1]) end(r); }
   }
-  if (++r.k % 2 === 0 && (r.phase === 'play' || r.phase === 'count'))
+  if (++r.k && (r.phase === 'play' || r.phase === 'count'))
     send(r, { t: 's', k: [rd(r.pk.x), rd(r.pk.y)], v: [rd(r.pk.vx), rd(r.pk.vy)], z: r.pause > 0 ? 1 : 0, p: r.pd.map(p => [rd(p.x), rd(p.y)]), sc: r.sc, tm: Math.ceil(r.t) });
 }
-setInterval(() => { for (const r of rooms.values()) if (r.phase === 'count' || r.phase === 'play') step(r); }, 1000 / 60);
+let acc = 0, prev = performance.now();
+setInterval(() => {
+  const n = performance.now(); acc += Math.min(n - prev, 100); prev = n;
+  while (acc >= 1000 / 60) { acc -= 1000 / 60; for (const r of rooms.values()) if (r.phase === 'count' || r.phase === 'play') step(r); }
+}, 4);
 setInterval(() => { for (const [k, r] of rooms) if (Date.now() - r.act > 18e5 || (!r.pl[0] && !r.pl[1] && Date.now() - r.act > 6e4)) rooms.delete(k); }, 6e4);
 
 setInterval(() => {
@@ -132,7 +136,7 @@ setInterval(() => {
 }, 500);
 const err = c => JSON.stringify({ t: 'err', c });
 const srv = http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html;charset=utf-8' }); s.end(fs.readFileSync(path.join(__dirname, 'public/index.html'))); });
-const wss = new WebSocketServer({ server: srv, path: '/ws', maxPayload: 1024 });
+const wss = new WebSocketServer({ server: srv, path: '/ws', maxPayload: 1024, perMessageDeflate: false });
 wss.on('connection', ws => {
   let r = null, i = -1;
   ws.on('message', async raw => {
