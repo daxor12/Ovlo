@@ -145,6 +145,10 @@ wss.on('connection', ws => {
       if (!(Number.isFinite(m.x) && Number.isFinite(m.y))) return;
       const p = r.pd[i]; p.tx = i ? W - m.x : m.x; p.ty = i ? H - m.y : m.y;
     } else if (m.t === 'ready' && (r.phase === 'wait' || r.phase === 'over') && r.pl[0] && r.pl[1]) {
+      if (r.bot && r.phase === 'over') { // rematch after a bot game goes back to the queue
+        r.pl[r.bi] = null; r.bot = 0; r.bk = null; r.phase = 'wait'; r.ready = [0, 0]; r.sc = [0, 0]; r.botAt = Date.now() + BOTWAIT; r.act = Date.now();
+        return info(r);
+      }
       r.ready[i] = 1; if (r.bot) r.ready[r.bi] = 1; r.act = Date.now();
       if (r.ready[0] && r.ready[1]) start(r); else info(r);
     }
