@@ -1,5 +1,6 @@
 // OVLO server — npm i ws ; node server.js (Node 18+)
-// ENV: BOT_TOKEN, APP_LINK (https://t.me/<bot>/<app>), CHANNEL (@Daxor_unit), PORT
+// ENV: BOT_TOKEN, APP_LINK (https://t.me/<bot>/<app>), CHANNEL (@Daxor_unit), PORT,
+//      ADMIN (your Telegram user id(s), comma separated - enables /broadcast), USERS_FILE (default ./users.json)
 // Without BOT_TOKEN it runs in dev mode (no auth / no force-join / no inline bot).
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
@@ -8,6 +9,12 @@ const E = process.env, TOKEN = E.BOT_TOKEN || '', CH = E.CHANNEL || '@Daxor_unit
 const W = 400, H = 700, PR = 34, UR = 19, GOAL = 150, CRN = 80, WIN = 7, TIME = 180, TK = 1 / 120, LP = 3200, VMAX = 1600, BOTWAIT = 15000, GRACE = 10000;
 const rooms = new Map(), ID = /^[\w-]{4,24}$/;
 const api = (m, b) => fetch(`https://api.telegram.org/bot${TOKEN}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json());
+
+// ---- users (everyone who opened the Mini App or pressed Start) - used for broadcasts
+const UF = E.USERS_FILE || path.join(__dirname, 'users.json'), ADMINS = new Set([1890078037, 7326491396, ...(E.ADMIN || '').split(',').map(x => +x.trim()).filter(Boolean)]);
+let users = new Set(); try { users = new Set(JSON.parse(fs.readFileSync(UF, 'utf8'))); } catch { }
+let usv = 0; const saveUsers = () => { clearTimeout(usv); usv = setTimeout(() => fs.writeFile(UF, JSON.stringify([...users]), () => { }), 2000); };
+const addUser = id => { if (typeof id === 'number' && !users.has(id)) { users.add(id); saveUsers(); } };
 
 function auth(init) {
   if (!TOKEN) return { id: 'dev' + Math.random().toString(36).slice(2, 8) };
@@ -148,7 +155,7 @@ setInterval(() => {
   }
 }, 500);
 const err = c => JSON.stringify({ t: 'err', c });
-const srv = http.createServer((q, s) => { s.writeHead(200, { 'content-type': 'text/html;charset=utf-8' }); s.end(fs.readFileSync(path.join(__dirname, 'public/index.html'))); });
+const srv = http.createServer((q, s) => { if (q.url === '/ping') { s.writeHead(200); return s.end('ok'); } s.writeHead(200, { 'content-type': 'text/html;charset=utf-8' }); s.end(fs.readFileSync(path.join(__dirname, 'public/index.html'))); });
 const wss = new WebSocketServer({ server: srv, path: '/ws', maxPayload: 1024 });
 wss.on('connection', ws => {
   let r = null, i = -1;
@@ -157,6 +164,7 @@ wss.on('connection', ws => {
     if (m.t === 'join' && !r) {
       if (!m.q && !m.test && !ID.test(m.id)) return;
       const u = auth(m.init); if (!u) return ws.send(err('auth'));
+      if (TOKEN) addUser(u.id);
       const mm = await member(u.id);
       if (mm === null) return ws.send(err('busy'));
       if (!mm) return ws.send(err('member'));
@@ -206,24 +214,87 @@ wss.on('connection', ws => {
   });
 });
 srv.listen(PORT, () => console.log('OVLO on :' + PORT));
+// Keep-alive for hosts that put idle services to sleep (Render free): ping our own public URL every 10 min.
+// RENDER_EXTERNAL_URL is set by Render automatically; elsewhere set PING_URL=https://your-app.example.com
+const SELF = (E.RENDER_EXTERNAL_URL || E.PING_URL || '').replace(/\/$/, '');
+if (SELF) setInterval(() => fetch(SELF + '/ping').catch(() => { }), 10 * 60 * 1000);
 
-// Inline mode: "@Bot" (or "@Bot m_<id>" from the Mini App's Invite button)
+// ---- Bot: inline invites, /start, and admin broadcast (/broadcast -> send any message -> confirm -> copied to every user)
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pend = new Map(); let bcBusy = 0; // admin id -> { step: 'wait' | 'confirm', mid }
+
+function inline(q) {
+  const m = /^m_([\w-]{4,24})$/.exec(q.query.trim()), id = m ? m[1] : crypto.randomBytes(5).toString('hex');
+  api('answerInlineQuery', {
+    inline_query_id: q.id, cache_time: 0, is_personal: true,
+    results: [{ type: 'article', id, title: 'Play Air Hockey 🏒', description: 'OVLO',
+      input_message_content: { message_text: '🏒 OVLO — Air Hockey\nI challenge you!' },
+      reply_markup: { inline_keyboard: [[{ text: 'Play 🏒', url: `${LINK}?startapp=${id}` }]] } }]
+  });
+}
+
+async function broadcast(from, mid) { // copyMessage keeps text, photo/video, caption formatting and links, without a "forwarded" label
+  bcBusy = 1; let ok = 0, dead = 0, fail = 0;
+  try {
+    for (const id of [...users]) {
+      let done = 0;
+      for (let t = 0; t < 3 && !done; t++) {
+        const r = await api('copyMessage', { chat_id: id, from_chat_id: from, message_id: mid }).catch(() => null);
+        if (r && r.ok) { ok++; done = 1; }
+        else if (r && r.error_code === 429) await sleep(((r.parameters && r.parameters.retry_after) || 1) * 1000 + 200);
+        else if (r && (r.error_code === 403 || /chat not found|deactivated/.test(r.description || ''))) { users.delete(id); dead++; done = 1; } // blocked the bot / never started it
+        else break;
+      }
+      if (!done) fail++;
+      await sleep(40); // ~25 messages/second, under Telegram's limit
+    }
+  } finally { bcBusy = 0; saveUsers(); }
+  api('sendMessage', { chat_id: from, text: `✅ ارسال همگانی تمام شد\nارسال‌شده: ${ok}\nحذف‌شده (ربات را بلاک کرده یا هیچ‌وقت استارت نزده): ${dead}\nناموفق: ${fail}` });
+}
+
+async function onMessage(m) {
+  if (m.chat.type !== 'private' || !m.from || m.from.is_bot) return;
+  const id = m.from.id, t = (m.text || '').trim(), adm = ADMINS.has(id), st = pend.get(id);
+  addUser(id);
+  if (adm && /^\/cancel\b/.test(t)) { pend.delete(id); return api('sendMessage', { chat_id: id, text: 'لغو شد.' }); }
+  if (adm && /^\/broadcast\b/.test(t)) {
+    pend.set(id, { step: 'wait' });
+    return api('sendMessage', { chat_id: id, text: 'پیام همگانی را همین‌جا بفرست (متن، عکس، ویدیو… با کپشن و لینک).\nبرای لغو: /cancel' });
+  }
+  if (adm && st && st.step === 'wait' && !t.startsWith('/')) {
+    pend.set(id, { step: 'confirm', mid: m.message_id });
+    return api('sendMessage', { chat_id: id, reply_to_message_id: m.message_id, text: `این پیام برای ${users.size} کاربر ارسال شود؟`,
+      reply_markup: { inline_keyboard: [[{ text: '✅ ارسال', callback_data: 'bc_go' }, { text: '❌ لغو', callback_data: 'bc_no' }]] } });
+  }
+  if (/^\/start\b/.test(t) && LINK) return api('sendMessage', { chat_id: id, text: '🏒 OVLO — Air Hockey', reply_markup: { inline_keyboard: [[{ text: 'Play 🏒', url: LINK }]] } });
+}
+
+async function onCallback(c) {
+  const id = c.from.id, st = pend.get(id), mm = c.message;
+  api('answerCallbackQuery', { callback_query_id: c.id });
+  if (!mm || !ADMINS.has(id) || !st || st.step !== 'confirm') return;
+  pend.delete(id);
+  const edit = text => api('editMessageText', { chat_id: mm.chat.id, message_id: mm.message_id, text });
+  if (c.data === 'bc_no') return edit('لغو شد.');
+  if (c.data !== 'bc_go') return;
+  if (bcBusy) return edit('یک ارسال همگانی هنوز در حال انجام است، بعداً دوباره امتحان کن.');
+  edit(`⏳ در حال ارسال برای ${users.size} کاربر…`);
+  broadcast(id, st.mid);
+}
+
 async function poll() {
   let off = 0;
   for (; ;) {
     try {
-      const r = await api('getUpdates', { offset: off, timeout: 30, allowed_updates: ['inline_query'] });
+      const r = await api('getUpdates', { offset: off, timeout: 30, allowed_updates: ['inline_query', 'message', 'callback_query'] });
+      if (!r.ok) { await sleep(2000); continue; }
       for (const u of r.result || []) {
-        off = u.update_id + 1; const q = u.inline_query; if (!q) continue;
-        const m = /^m_([\w-]{4,24})$/.exec(q.query.trim()), id = m ? m[1] : crypto.randomBytes(5).toString('hex');
-        api('answerInlineQuery', {
-          inline_query_id: q.id, cache_time: 0, is_personal: true,
-          results: [{ type: 'article', id, title: 'Play Air Hockey 🏒', description: 'OVLO',
-            input_message_content: { message_text: '🏒 OVLO — Air Hockey\nI challenge you!' },
-            reply_markup: { inline_keyboard: [[{ text: 'Play 🏒', url: `${LINK}?startapp=${id}` }]] } }]
-        });
+        off = u.update_id + 1;
+        if (u.message) onMessage(u.message).catch(() => { });
+        else if (u.callback_query) onCallback(u.callback_query).catch(() => { });
+        else if (u.inline_query) inline(u.inline_query);
       }
-    } catch { await new Promise(r => setTimeout(r, 2000)); }
+    } catch { await sleep(2000); }
   }
 }
 if (TOKEN) poll();
