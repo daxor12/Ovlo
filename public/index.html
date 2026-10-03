@@ -56,7 +56,7 @@ let qt=0,bf=0,ws=null,id='',idx=0,phase='home',pend=0,qm=0,rc=0,jq=0,jt=0,roomMs
 const rid=()=>[...crypto.getRandomValues(new Uint8Array(5))].map(b=>b.toString(16).padStart(2,'0')).join('');
 function join(m,q,t){lg=null;bf=0;clearTimeout(qt);id=m;qm=q?1:0;jt=t?1:0;$('inv2').hidden=!!(q||t);roomMsg=null;show('wt');$('wtx').textContent=T('conn');$('wh').textContent='';$('rdy').hidden=true;$('mc').textContent=m?'#'+m.slice(-4):'';
  if(ws)ws.close();rc=0;jq=qm;conn()}
-function conn(){const s=ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
+function conn(){off=null;jit=0;const s=ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
  s.onopen=()=>s.send(JSON.stringify({t:'join',id,init:tg?tg.initData:'',q:jq,test:jt}));
  s.onmessage=e=>on(JSON.parse(e.data));
  s.onclose=()=>{if(ws!==s||(phase!=='play'&&phase!=='cd'))return;
@@ -69,7 +69,7 @@ function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh
 function on(m){switch(m.t){
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T({full:'full',busy:'busy',auth:'tg'}[m.c]||'dcm');show('dc')}break;
  case 'room':if(m.n>1)clearTimeout(qt);rc=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0;jt=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
- case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];lsn=0;sc=[0,0];tm=180;mx=W/2;my=H-90}
+ case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];lsn=0;vo=[0,0];sc=[0,0];tm=180;mx=W/2;my=H-90}
   $('cdn').hidden=false;$('cdn').textContent=m.n||T('go');if(!m.n)setTimeout(()=>$('cdn').hidden=true,600);break;
  case 's':phase='play';if(!$('gm').classList.contains('on')){show('gm');fit()}snap(m);break;
  case 'goal':try{tg.HapticFeedback.impactOccurred('medium')}catch(e){}break;
@@ -98,9 +98,14 @@ function table(){const c=ox;c.setTransform(D*S,0,0,D*S,0,0);c.clearRect(0,0,W,H)
  wall('#9b7bff',[[gx,3],[3,3],[3,H/2]]);wall('#9b7bff',[[gy,3],[W-3,3],[W-3,H/2]]);
  wall('#22d3ee',[[3,H/2],[3,H-3],[gx,H-3]]);wall('#22d3ee',[[W-3,H/2],[W-3,H-3],[gy,H-3]]);c.shadowBlur=0}
 const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
-let gap=33,lsn=0;
-function snap(m){const nw=performance.now();if(lsn)gap+=(Math.min(200,nw-lsn)-gap)*.1;lsn=nw;const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:nw,k,v:idx?[-m.v[0],-m.v[1]]:m.v,me:p[idx],op:p[1-idx]});if(buf.length>24)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
-const FEEL=.75; // 0 = paddle drawn exactly where the server has it, 1 = exactly under the finger
+let gap=33,lsn=0,off=null,jit=0,vo=[0,0],lf=0;
+function snap(m){const nw=performance.now();if(lsn)gap+=(Math.min(200,nw-lsn)-gap)*.1;lsn=nw;
+ const ts=m.ts!=null?m.ts:nw,o=nw-ts;if(off===null||o<off)off=o;else off+=(o-off)*.002;jit+=(Math.max(0,o-off)-jit)*.05; // server clock offset + jitter estimate
+ const k=fl(...m.k),p=m.p.map(q=>fl(...q));buf.push({t:nw,s:ts,k,v:idx?[-m.v[0],-m.v[1]]:m.v,me:p[idx],op:p[1-idx]});if(buf.length>24)buf.shift();sc=[m.sc[idx],m.sc[1-idx]];tm=m.tm}
+function fwd(a,sec){ // no fresh snapshot yet: keep running the real puck physics (walls, corners, paddles) instead of flying straight through
+ const g={pk:{x:a.k[0],y:a.k[1],vx:a.v[0],vy:a.v[1]},me:{x:a.me[0],y:a.me[1],x0:a.me[0],y0:a.me[1],vx:0,vy:0},bt:{x:a.op[0],y:a.op[1],x0:a.op[0],y0:a.op[1],vx:0,vy:0}};
+ for(let t=0,e=Math.min(.3,sec);t<e;t+=LDT)lgPuck(g,Math.min(LDT,e-t));return[g.pk.x,g.pk.y]}
+const FEEL=0; // 0 = paddle drawn exactly where the server has it, 1 = exactly under the finger
 let mx=W/2,my=H-90,lastSend=0,moved=0;
 let lx=0,ly=0,drag=0;
 const ptr=new Map(),p2=()=>lg&&lg.two&&phase==='local';
@@ -125,15 +130,20 @@ function frame(now){requestAnimationFrame(frame);if(phase==='local'){localFrame(
  cx.fillText(sc[1],W/2,H/2-60);cx.fillText(sc[0],W/2,H/2+160);
  cx.textAlign='right';cx.fillStyle='#8a93b8';cx.font='600 15px system-ui';cx.fillText(Math.floor(tm/60)+':'+String(tm%60).padStart(2,'0'),W-14,H/2-10);
  let k=[W/2,H/2],op=[W/2,90],me=[W/2,H-90];
- if(buf.length){const rt=now-Math.min(100,Math.max(50,gap*2+10));let a=buf[0],b=buf[0];
-  for(let i=buf.length-1;i>=0;i--)if(buf[i].t<=rt){a=buf[i];b=buf[i+1]||a;break}
-  if(buf[0].t>rt)a=b=buf[0];const t=b.t>a.t?Math.min(1,(rt-a.t)/(b.t-a.t)):0;
-  k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];if(a===b&&rt>a.t&&a.v){const d=Math.min(.1,(rt-a.t)/1000);k=[a.k[0]+a.v[0]*d,a.k[1]+a.v[1]*d]}
+ if(buf.length&&off!==null){const rt=now-off-Math.min(160,Math.max(50,gap*2+jit*2.5));let a=buf[0],b=buf[0];
+  for(let i=buf.length-1;i>=0;i--)if(buf[i].s<=rt){a=buf[i];b=buf[i+1]||a;break}
+  if(buf[0].s>rt)a=b=buf[0];const t=b.s>a.s?Math.min(1,(rt-a.s)/(b.s-a.s)):0;
+  k=[f(a.k[0],b.k[0],t),f(a.k[1],b.k[1],t)];if(a===b&&rt>a.s)k=fwd(a,(rt-a.s)/1000);
   op=[f(a.op[0],b.op[0],t),f(a.op[1],b.op[1],t)];me=[f(a.me[0],b.me[0],t),f(a.me[1],b.me[1],t)]}
+ const mp=[me[0]+(mx-me[0])*FEEL,me[1]+(my-me[1])*FEEL];
+ {const R=PR+UR,dx=k[0]-mp[0],dy=k[1]-mp[1],d=Math.hypot(dx,dy),fd=Math.min(.05,(now-lf)/1000);lf=now;let o=[0,0];
+  if(d<R){const nx=d>1e-6?dx/d:0,ny=d>1e-6?dy/d:-1;o=[mp[0]+nx*R-k[0],mp[1]+ny*R-k[1]]}
+  if(Math.hypot(o[0],o[1])>=Math.hypot(vo[0],vo[1]))vo=o;else{const r=1-Math.exp(-18*fd);vo=[vo[0]+(o[0]-vo[0])*r,vo[1]+(o[1]-vo[1])*r]}
+  k=[k[0]+vo[0],k[1]+vo[1]]}
  ring(op[0],op[1],'#8b6cff');
  cx.globalAlpha=.2;cx.fillStyle='#22d3ee';cx.beginPath();cx.arc(k[0],k[1],UR+6,0,7);cx.fill();cx.globalAlpha=1;
  cx.fillStyle='#fff';cx.strokeStyle='#67c8ee';cx.lineWidth=3;cx.beginPath();cx.arc(k[0],k[1],UR-1,0,7);cx.fill();cx.stroke();
- ring(me[0]+(mx-me[0])*FEEL,me[1]+(my-me[1])*FEEL,'#18b6e8');
+ ring(mp[0],mp[1],'#18b6e8');
  if(phase==='play'&&buf.length&&now-buf[buf.length-1].t>1500){cx.fillStyle='rgba(43,51,80,.75)';cx.font='700 22px system-ui';cx.textAlign='center';cx.fillText(T('rc'),W/2,H/2+8)}
  if(moved&&phase==='play'&&now-lastSend>16){lastSend=now;moved=0;out({t:'m',x:Math.round(mx),y:Math.round(my)})}}
 // ---- local bot mode (runs fully on-device: no network, no lag) ----
