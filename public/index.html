@@ -24,11 +24,12 @@ h2{margin:0;font-size:22px;font-weight:700}
 .note{font-size:11px;color:#8a93b8;max-width:270px;line-height:1.6;margin:-6px 0 4px}
 #gm{padding:0}
 #cv{border-radius:26px;box-shadow:0 10px 40px rgba(120,130,230,.22);touch-action:none;background:#fff}
+#tst{position:absolute;top:env(safe-area-inset-top,0px);right:0;width:56px;height:56px;z-index:5}
 #cdn{position:absolute;font-size:120px;font-weight:800;color:#6f7be8;pointer-events:none;animation:p .9s ease-out infinite}
 @keyframes p{from{transform:scale(1.25);opacity:.3}to{transform:scale(1);opacity:1}}
 #res{font-size:44px;font-weight:800;letter-spacing:.06em}#scr{font-size:30px;color:#6f7be8;margin-bottom:18px;direction:ltr}
 </style></head><body>
-<div id="hm" class="s on"><h1>OVLO</h1><div class="sub" data-i="sub"></div>
+<div id="hm" class="s on"><div id="tst"></div><h1>OVLO</h1><div class="sub" data-i="sub"></div>
 <button class="b" id="bot" data-i="bot"></button><button class="b g" id="two" data-i="two"></button><button class="b g" id="inv" data-i="inv"></button><div class="note" data-i="pn"></div>
 <div class="lang"><span data-l="fa">فارسی</span>|<span data-l="en">English</span></div></div>
 <div id="jn" class="s"><h2 data-i="jt"></h2><button class="b" id="jc" data-i="jc"></button><button class="b g" id="ck" data-i="ck"></button><div class="hint" id="jh"></div></div>
@@ -51,12 +52,12 @@ function setLang(l){lang=l;try{localStorage.ovlo=l}catch(e){}document.documentEl
 document.querySelectorAll('[data-l]').forEach(e=>e.onclick=()=>setLang(e.dataset.l));
 const show=i=>document.querySelectorAll('.s').forEach(e=>e.classList.toggle('on',e.id===i));
 
-let qt=0,bf=0,ws=null,id='',idx=0,phase='home',pend=0,qm=0,rc=0,jq=0,roomMsg=null,buf=[],sc=[0,0],tm=180;
+let qt=0,bf=0,ws=null,id='',idx=0,phase='home',pend=0,qm=0,rc=0,jq=0,jt=0,roomMsg=null,buf=[],sc=[0,0],tm=180;
 const rid=()=>[...crypto.getRandomValues(new Uint8Array(5))].map(b=>b.toString(16).padStart(2,'0')).join('');
-function join(m,q){lg=null;bf=0;clearTimeout(qt);id=m;qm=q?1:0;$('inv2').hidden=!!q;roomMsg=null;show('wt');$('wtx').textContent=T('conn');$('wh').textContent='';$('rdy').hidden=true;$('mc').textContent=m?'#'+m.slice(-4):'';
+function join(m,q,t){lg=null;bf=0;clearTimeout(qt);id=m;qm=q?1:0;jt=t?1:0;$('inv2').hidden=!!(q||t);roomMsg=null;show('wt');$('wtx').textContent=T('conn');$('wh').textContent='';$('rdy').hidden=true;$('mc').textContent=m?'#'+m.slice(-4):'';
  if(ws)ws.close();rc=0;jq=qm;conn()}
 function conn(){const s=ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');
- s.onopen=()=>s.send(JSON.stringify({t:'join',id,init:tg?tg.initData:'',q:jq}));
+ s.onopen=()=>s.send(JSON.stringify({t:'join',id,init:tg?tg.initData:'',q:jq,test:jt}));
  s.onmessage=e=>on(JSON.parse(e.data));
  s.onclose=()=>{if(ws!==s||(phase!=='play'&&phase!=='cd'))return;
   if(rc<6){rc++;setTimeout(()=>{if(ws===s)conn()},1500)}else{phase='left';$('dm').textContent=T('dcm');show('dc')}}}
@@ -67,18 +68,18 @@ function uiRoom(m){const j=m.n>1;$('wtx').textContent=T(j?'joined':'wait');$('wh
  $('re').disabled=!!m.ready[m.idx]}
 function on(m){switch(m.t){
  case 'err':if(m.c==='member'){show('jn')}else{$('dm').textContent=T({full:'full',busy:'busy',auth:'tg'}[m.c]||'dcm');show('dc')}break;
- case 'room':if(m.n>1)clearTimeout(qt);rc=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
+ case 'room':if(m.n>1)clearTimeout(qt);rc=0;roomMsg=m;idx=m.idx;if(m.id){id=m.id;jq=0;jt=0}phase=m.p;uiRoom(m);if(m.p==='wait'){show('wt');if(pend){pend=0;invite()}}break;
  case 'count':phase='cd';show('gm');fit();if(m.n){buf=[];lsn=0;sc=[0,0];tm=180;mx=W/2;my=H-90}
   $('cdn').hidden=false;$('cdn').textContent=m.n||T('go');if(!m.n)setTimeout(()=>$('cdn').hidden=true,600);break;
  case 's':phase='play';if(!$('gm').classList.contains('on')){show('gm');fit()}snap(m);break;
  case 'goal':try{tg.HapticFeedback.impactOccurred('medium')}catch(e){}break;
  case 'over':phase='over';{const w=m.w===idx;$('res').textContent=T(w?'win':'lose');$('scr').textContent=m.sc[idx]+' — '+m.sc[1-idx];$('re').disabled=false;show('ov')}break;
  case 'left':phase='left';$('dm').textContent=T('dcm');show('dc')}}
-$('inv').onclick=()=>{pend=1;join(rid())};$('inv2').onclick=invite;
+$('tst').onclick=()=>join('',0,1);$('inv').onclick=()=>{pend=1;join(rid())};$('inv2').onclick=invite;
 $('rdy').onclick=()=>{out({t:'ready'})};
 $('re').onclick=()=>{if(!lg)return out({t:'ready'});if(lg.two)return lgStart(0,0,1);const di=lg.di,hu=lg.hum;if(hu){$('re').disabled=true;setTimeout(()=>lgStart(di,1),900+Math.random()*1800)}else lgStart(di)};
 $('jc').onclick=()=>{const u='https://t.me/Daxor_unit';tg?tg.openTelegramLink(u):open(u)};
-$('ck').onclick=()=>{$('jh').textContent='';join(id,qm);setTimeout(()=>{if($('jn').classList.contains('on'))$('jh').textContent=T('nj')},900)};
+$('ck').onclick=()=>{$('jh').textContent='';join(id,qm,jt);setTimeout(()=>{if($('jn').classList.contains('on'))$('jh').textContent=T('nj')},900)};
 document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{if(ws){const s=ws;ws=null;s.close()}clearTimeout(qt);lg=null;bf=0;phase='home';show('hm')});
 
 // ---- rendering ----
@@ -93,7 +94,7 @@ function table(){const c=ox;c.setTransform(D*S,0,0,D*S,0,0);c.clearRect(0,0,W,H)
  c.beginPath();c.arc(W/2,H/2,64,0,7);c.stroke();
  c.beginPath();c.arc(W/2,0,GOAL/2+34,0,Math.PI);c.stroke();c.beginPath();c.arc(W/2,H,GOAL/2+34,Math.PI,0);c.stroke();
  const gx=W/2-GOAL/2,gy=W/2+GOAL/2;c.lineWidth=5;c.lineCap='round';
- const rr=phase==='local'?CRN+UR-3:0;const wall=(col,pts)=>{c.strokeStyle=col;c.shadowColor=col;c.shadowBlur=10;c.beginPath();c.moveTo(...pts[0]);c.arcTo(pts[1][0],pts[1][1],pts[2][0],pts[2][1],rr);c.lineTo(...pts[2]);c.stroke()};
+ const rr=CRN+UR-3;const wall=(col,pts)=>{c.strokeStyle=col;c.shadowColor=col;c.shadowBlur=10;c.beginPath();c.moveTo(...pts[0]);c.arcTo(pts[1][0],pts[1][1],pts[2][0],pts[2][1],rr);c.lineTo(...pts[2]);c.stroke()};
  wall('#9b7bff',[[gx,3],[3,3],[3,H/2]]);wall('#9b7bff',[[gy,3],[W-3,3],[W-3,H/2]]);
  wall('#22d3ee',[[3,H/2],[3,H-3],[gx,H-3]]);wall('#22d3ee',[[W-3,H/2],[W-3,H-3],[gy,H-3]]);c.shadowBlur=0}
 const f=(a,b,t)=>a+(b-a)*t,fl=(x,y)=>idx?[W-x,H-y]:[x,y];
